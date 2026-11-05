@@ -58,7 +58,7 @@
 </div>
 
 <script>
-// GANTI DENGAN URL WEB APP GOOGLE APPS SCRIPT ANDA
+// URL WEB APP GOOGLE APPS SCRIPT ANDA
 const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxJsQTRtjziiNPAoYYv48O0sgNbUBzE8iqajGgsz7oKixWqLILjWoV8XlufGMcMiyz9Bg/exec";
 
 const urlParams = new URLSearchParams(window.location.search);
@@ -78,7 +78,7 @@ if (!currentBib) {
   initCheckInUI(currentBib, currentCategory);
 }
 
-// Daftarkan BIB & Ambil Nama dari Pendaftaran
+// Daftarkan BIB & Ambil Nama dari Pendaftaran (Menggunakan GET)
 async function handleRegisterCheckin(e) {
   e.preventDefault();
   const regId = document.getElementById('inputRegId').value.trim();
@@ -92,10 +92,9 @@ async function handleRegisterCheckin(e) {
   showStatus("Memverifikasi ID Pendaftar...", "warn");
 
   try {
-    let res = await fetch(SCRIPT_URL, {
-      method: 'POST',
-      body: JSON.stringify({ action: 'register_checkin', regId, category, bib })
-    });
+    const targetUrl = `${SCRIPT_URL}?action=register_checkin&regId=${encodeURIComponent(regId)}&category=${encodeURIComponent(category)}&bib=${encodeURIComponent(bib)}`;
+    
+    let res = await fetch(targetUrl);
     let r = await res.json();
 
     if (r.status === 'success') {
@@ -153,7 +152,7 @@ async function handleCheckInWithGPS(pointKey, bib, CP_COORDINATES) {
   showStatus('Mendeteksi posisi GPS...', 'warn');
 
   if (!navigator.geolocation) {
-    alert('Browser tidak mendukunng GPS.');
+    alert('Browser tidak mendukung GPS.');
     return;
   }
 
@@ -185,20 +184,13 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
   return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)));
 }
 
+// Kirim Absensi ke Server (Menggunakan GET)
 async function sendToServer(pointKey, bib, lat, lng) {
   const timestamp = new Date().toISOString();
   try {
-    let res = await fetch(SCRIPT_URL, {
-      method: 'POST',
-      body: JSON.stringify({ 
-        action: 'checkin', 
-        bib: bib,          // <-- Pastikan bib ikut dikirim
-        point: pointKey, 
-        timestamp, 
-        lat, 
-        lng 
-      })
-    });
+    const targetUrl = `${SCRIPT_URL}?action=checkin&bib=${encodeURIComponent(bib)}&point=${encodeURIComponent(pointKey)}&timestamp=${encodeURIComponent(timestamp)}&lat=${lat}&lng=${lng}`;
+    
+    let res = await fetch(targetUrl);
     let r = await res.json();
     showStatus(r.message, r.status === 'success' ? 'ok' : 'err');
   } catch (e) {
