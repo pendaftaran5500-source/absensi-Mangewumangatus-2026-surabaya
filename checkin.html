@@ -190,7 +190,14 @@ async function sendToServer(pointKey, bib, lat, lng) {
   try {
     let res = await fetch(SCRIPT_URL, {
       method: 'POST',
-      body: JSON.stringify({ action: 'checkin', bib, point: pointKey, timestamp, lat, lng })
+      body: JSON.stringify({ 
+        action: 'checkin', 
+        bib: bib,          // <-- Pastikan bib ikut dikirim
+        point: pointKey, 
+        timestamp, 
+        lat, 
+        lng 
+      })
     });
     let r = await res.json();
     showStatus(r.message, r.status === 'success' ? 'ok' : 'err');
