@@ -35,24 +35,17 @@
   <div class="subtitle" id="pageSubtitle">Portal Layanan Peserta</div>
   <div id="status" class="status"></div>
 
-  <!-- TAMPILAN 1: FORM KLAIM BIB & RACE PACK -->
+<!-- TAMPILAN 1: FORM KLAIM BIB & RACE PACK -->
   <div id="viewKlaimBIB" class="hidden">
     <div class="info-box">
-      <b>Pengambilan Race Pack:</b><br>Masukkan ID Pendaftar Anda, pilih kategori, dan tentukan Nomor BIB Anda.
+      <b>Pengambilan Race Pack:</b><br>Masukkan ID Pendaftar Anda dan tentukan Nomor BIB sesuai kategori Anda.
     </div>
     <form id="bibForm" onsubmit="handleRegisterCheckin(event)">
       <div class="form-group">
         <label for="inputRegId">ID Pendaftar (contoh: Mm2026sby-0001)</label>
         <input type="text" id="inputRegId" placeholder="Masukkan ID Pendaftar" required>
       </div>
-      <div class="form-group">
-        <label for="selectCategory">Kategori Event</label>
-        <select id="selectCategory" required>
-          <option value="500km">500KM</option>
-          <option value="50km">50KM</option>
-          <option value="5km">5KM</option>
-        </select>
-      </div>
+      <!-- Dropdown Kategori DIHAPUS agar peserta tidak bisa salah pilih / manipulasi -->
       <div class="form-group">
         <label for="inputBIB">Nomor BIB Pilihan</label>
         <input type="text" id="inputBIB" placeholder="Contoh: 501 / B01 / A01" required>
@@ -143,7 +136,6 @@ function showViewAbsensiGPS(bib, category) {
 async function handleRegisterCheckin(e) {
   e.preventDefault();
   const regId = document.getElementById('inputRegId').value.trim();
-  const category = document.getElementById('selectCategory').value;
   const bib = document.getElementById('inputBIB').value.trim();
   const btn = document.getElementById('btnSubmitBib');
 
@@ -153,15 +145,23 @@ async function handleRegisterCheckin(e) {
   showStatus("Memverifikasi ID & Nomor BIB...", "warn");
 
   try {
-    const targetUrl = `${SCRIPT_URL}?action=register_checkin&regId=${encodeURIComponent(regId)}&category=${encodeURIComponent(category)}&bib=${encodeURIComponent(bib)}`;
+    // Kirim regId dan bib saja, kategori akan divalidasi mutlak oleh backend
+    const targetUrl = `${SCRIPT_URL}?action=register_checkin&regId=${encodeURIComponent(regId)}&bib=${encodeURIComponent(bib)}`;
     let res = await fetch(targetUrl);
     let r = await res.json();
 
     if (r.status === 'success') {
       showStatus("Berhasil mendaftarkan BIB!", "ok");
+      
+      // Ambil kategori dari response backend yang valid
+      const verifiedCategory = r.category; 
+
+      localStorage.setItem('mm_bib', bib);
+      localStorage.setItem('mm_cat', verifiedCategory);
+
       setTimeout(() => {
         showStatus("", "");
-        showViewAbsensiGPS(bib, category);
+        showViewAbsensiGPS(bib, verifiedCategory);
       }, 1000);
     } else {
       showStatus(`Gagal: ${r.message}`, "err");
