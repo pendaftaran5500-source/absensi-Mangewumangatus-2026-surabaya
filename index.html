@@ -160,6 +160,17 @@ async function checkRegIdType() {
   }
 }
 
+// === TAMBAHKAN KODE INI TEPAT DI SINI ===
+window.addEventListener('DOMContentLoaded', () => {
+  let regInput = document.getElementById('inputRegId');
+  if (regInput && regInput.value.trim() !== '') {
+    checkRegIdType();
+  }
+});
+
+
+// // KLAIM BIB (Mendukung input 1 BIB atau 2 BIB jika kategori Pairing)
+async function handleRegisterCheckin(e) {
 // KLAIM BIB (Mendukung input 1 BIB atau 2 BIB jika kategori Pairing)
 async function handleRegisterCheckin(e) {
   e.preventDefault();
