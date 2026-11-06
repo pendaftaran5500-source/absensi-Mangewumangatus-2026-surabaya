@@ -35,10 +35,12 @@
   <div class="subtitle" id="pageSubtitle">Portal Layanan Peserta</div>
   <div id="status" class="status"></div>
 
-<!-- TAMPILAN 1: FORM KLAIM BIB & RACE PACK -->
+  <!-- TAMPILAN 1: FORM KLAIM BIB & RACE PACK -->
   <div id="viewKlaimBIB" class="hidden">
     <div class="info-box">
-      <b>Pengambilan Race Pack:</b><br>Masukkan ID Pendaftar Anda. Jika kategori Pairing, sistem otomatis membuka 2 kolom Nomor BIB.
+      <b>Pengambilan Race Pack:</b><br>Masukkan ID Pendaftar Anda. Jika kategori Pairing, sistem otomatis membuka 2 kolom Nomor BIB.<br><br>
+      Status awal pembayaran: <b>Menunggu Verifikasi</b>. Pendaftaran belum dianggap lunas sebelum diperiksa panitia.<br><br>
+      📧 <b>Penting:</b> Harap cek email Anda (folder <b>Inbox</b> & <b>Spam/Junk</b>) secara berkala untuk menerima update status pendaftaran dan bukti pembayaran.
     </div>
     <form id="bibForm" onsubmit="handleRegisterCheckin(event)">
       <div class="form-group">
@@ -130,7 +132,16 @@ function showViewAbsensiGPS(bib, category) {
     gpxContainer.innerHTML = `<div style="background:#fef9c3; color:#854d0e; padding:12px; border-radius:8px; font-size:13px; text-align:center; border:1px solid #fef08a;"><b>Info GPX:</b> Kategori 500KM menggunakan rute mandiri yang Anda tentukan sendiri.</div>`;
   } else {
     const gpxUrl = GPX_LINKS[catLower] || '#';
-    gpxContainer.innerHTML = `<a id="btnGpx" href="${gpxUrl}" target="_blank" class="btn btn-gpx">🗺️ Download Rute GPX (${category.toUpperCase()})</a>`;
+    
+    // Batas waktu kunci GPX: 25 Desember 2026 jam 20:59:00
+    const lockUntil = new Date('2026-12-25T20:59:00');
+    const now = new Date();
+
+    if (now < lockUntil) {
+      gpxContainer.innerHTML = `<a id="btnGpx" href="#" class="btn btn-gpx" style="pointer-events: none; opacity: 0.5; cursor: not-allowed;" title="Rute GPX akan dibuka pada 25 Desember 2026 pukul 20:59">🔒 Rute GPX ${category.toUpperCase()} (Dibuka 25 Des 20:59)</a>`;
+    } else {
+      gpxContainer.innerHTML = `<a id="btnGpx" href="${gpxUrl}" target="_blank" class="btn btn-gpx">🗺️ Download Rute GPX (${category.toUpperCase()})</a>`;
+    }
   }
 
   initCheckInButtons(bib, category);
@@ -160,7 +171,7 @@ async function checkRegIdType() {
   }
 }
 
-// === TAMBAHKAN KODE INI TEPAT DI SINI ===
+// Event listener saat halaman dimuat untuk cek ID Pendaftar yang sudah tersimpan
 window.addEventListener('DOMContentLoaded', () => {
   let regInput = document.getElementById('inputRegId');
   if (regInput && regInput.value.trim() !== '') {
@@ -168,9 +179,6 @@ window.addEventListener('DOMContentLoaded', () => {
   }
 });
 
-
-// // KLAIM BIB (Mendukung input 1 BIB atau 2 BIB jika kategori Pairing)
-async function handleRegisterCheckin(e) {
 // KLAIM BIB (Mendukung input 1 BIB atau 2 BIB jika kategori Pairing)
 async function handleRegisterCheckin(e) {
   e.preventDefault();
@@ -181,7 +189,6 @@ async function handleRegisterCheckin(e) {
 
   if (!regId || !bib) return alert("Harap isi ID Pendaftar dan Nomor BIB Utama!");
 
-  // Gabungkan BIB jika pairing (misal: "501 & 502" atau format lain sesuai backend Anda)
   const combinedBib = bib2 ? `${bib} & ${bib2}` : bib;
 
   btn.disabled = true;
