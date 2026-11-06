@@ -38,18 +38,25 @@
 <!-- TAMPILAN 1: FORM KLAIM BIB & RACE PACK -->
   <div id="viewKlaimBIB" class="hidden">
     <div class="info-box">
-      <b>Pengambilan Race Pack:</b><br>Masukkan ID Pendaftar Anda dan tentukan Nomor BIB sesuai kategori Anda.
+      <b>Pengambilan Race Pack:</b><br>Masukkan ID Pendaftar Anda. Jika kategori Pairing, sistem otomatis membuka 2 kolom Nomor BIB.
     </div>
     <form id="bibForm" onsubmit="handleRegisterCheckin(event)">
       <div class="form-group">
         <label for="inputRegId">ID Pendaftar (contoh: Mm2026sby-0001)</label>
-        <input type="text" id="inputRegId" placeholder="Masukkan ID Pendaftar" required>
+        <input type="text" id="inputRegId" placeholder="Masukkan ID Pendaftar" onblur="checkRegIdType()" required>
       </div>
-      <!-- Dropdown Kategori DIHAPUS agar peserta tidak bisa salah pilih / manipulasi -->
+      
       <div class="form-group">
-        <label for="inputBIB">Nomor BIB Pilihan</label>
-        <input type="text" id="inputBIB" placeholder="Contoh: 501 / B01 / A01" required>
+        <label for="inputBIB">Nomor BIB Peserta Utama</label>
+        <input type="text" id="inputBIB" placeholder="Contoh: 501 / A01" required>
       </div>
+
+      <!-- Kolom BIB Kedua khusus Pairing (Hidden secara default) -->
+      <div class="form-group hidden" id="groupBibPair">
+        <label for="inputBIB2">Nomor BIB Peserta Pasangan</label>
+        <input type="text" id="inputBIB2" placeholder="Contoh: 502 / A02">
+      </div>
+
       <button type="submit" id="btnSubmitBib" class="btn">Simpan BIB & Lanjut Ke Menu Absensi</button>
     </form>
   </div>
@@ -58,7 +65,7 @@
   <div id="viewAbsensiGPS" class="hidden">
     <div id="infoPeserta" class="info-box">Memuat data peserta...</div>
 
-    <!-- AREA GPX (Tampil jika ada link panitia, disembunyikan/custom jika kategori 500km) -->
+    <!-- AREA GPX -->
     <div id="gpxContainer">
       <a id="btnGpx" href="#" target="_blank" class="btn btn-gpx">🗺️ Download Rute GPX</a>
     </div>
@@ -80,7 +87,7 @@ const SCRIPT_URL = "https://script.google.com/macros/s/AKfycby3MLXprrJtKgM_gyqfa
 // TANGGAL RESMI EVENT (Format: YYYY-MM-DD)
 const EVENT_DATE = "2026-12-26"; 
 
-// LINK GPX PANITIA (Hanya untuk kategori tertentu, 500km dikosongkan karena rute mandiri)
+// LINK GPX PANITIA
 const GPX_LINKS = {
   '50km':  'https://example.com/rute-50km.gpx',
   '5km':   'https://example.com/rute-5km.gpx'
@@ -116,15 +123,12 @@ function showViewAbsensiGPS(bib, category) {
 
   document.getElementById('infoPeserta').innerHTML = `<b>No. BIB:</b> ${bib} &nbsp;|&nbsp; <b>Kategori:</b> ${category.toUpperCase()}`;
   
-  // Atur Tampilan GPX Berdasarkan Kategori
   const gpxContainer = document.getElementById('gpxContainer');
   const catLower = category.toLowerCase();
 
   if (catLower.includes('500')) {
-    // Kategori 500KM rute mandiri (peserta buat sendiri)
     gpxContainer.innerHTML = `<div style="background:#fef9c3; color:#854d0e; padding:12px; border-radius:8px; font-size:13px; text-align:center; border:1px solid #fef08a;"><b>Info GPX:</b> Kategori 500KM menggunakan rute mandiri yang Anda tentukan sendiri.</div>`;
   } else {
-    // Kategori lain menggunakan GPX dari panitia
     const gpxUrl = GPX_LINKS[catLower] || '#';
     gpxContainer.innerHTML = `<a id="btnGpx" href="${gpxUrl}" target="_blank" class="btn btn-gpx">🗺️ Download Rute GPX (${category.toUpperCase()})</a>`;
   }
@@ -132,36 +136,62 @@ function showViewAbsensiGPS(bib, category) {
   initCheckInButtons(bib, category);
 }
 
-// KLAIM BIB (Mengirim kategori & BIB ke server untuk divalidasi keunikan nomornya per kategori)
+// Fungsi opsional untuk mengecek apakah ID yang diketik adalah kategori Pairing
+async function checkRegIdType() {
+  const regId = document.getElementById('inputRegId').value.trim();
+  const groupBibPair = document.getElementById('groupBibPair');
+  const inputBib2 = document.getElementById('inputBIB2');
+
+  if (!regId) return;
+
+  try {
+    const res = await fetch(`${SCRIPT_URL}?action=check_category&regId=${encodeURIComponent(regId)}`);
+    const r = await res.json();
+    if (r.status === 'success' && r.category && r.category.toLowerCase().includes('pairing')) {
+      groupBibPair.classList.remove('hidden');
+      inputBib2.required = true;
+    } else {
+      groupBibPair.classList.add('hidden');
+      inputBib2.required = false;
+      inputBib2.value = '';
+    }
+  } catch (e) {
+    // Abaikan jika offline / endpoint belum siap, form tetap bisa berjalan
+  }
+}
+
+// KLAIM BIB (Mendukung input 1 BIB atau 2 BIB jika kategori Pairing)
 async function handleRegisterCheckin(e) {
   e.preventDefault();
   const regId = document.getElementById('inputRegId').value.trim();
   const bib = document.getElementById('inputBIB').value.trim();
+  const bib2 = document.getElementById('inputBIB2').value.trim();
   const btn = document.getElementById('btnSubmitBib');
 
-  if (!regId || !bib) return alert("Harap isi semua kolom!");
+  if (!regId || !bib) return alert("Harap isi ID Pendaftar dan Nomor BIB Utama!");
+
+  // Gabungkan BIB jika pairing (misal: "501 & 502" atau format lain sesuai backend Anda)
+  const combinedBib = bib2 ? `${bib} & ${bib2}` : bib;
 
   btn.disabled = true;
   showStatus("Memverifikasi ID & Nomor BIB...", "warn");
 
   try {
-    // Kirim regId dan bib saja, kategori akan divalidasi mutlak oleh backend
-    const targetUrl = `${SCRIPT_URL}?action=register_checkin&regId=${encodeURIComponent(regId)}&bib=${encodeURIComponent(bib)}`;
+    const targetUrl = `${SCRIPT_URL}?action=register_checkin&regId=${encodeURIComponent(regId)}&bib=${encodeURIComponent(combinedBib)}`;
     let res = await fetch(targetUrl);
     let r = await res.json();
 
     if (r.status === 'success') {
       showStatus("Berhasil mendaftarkan BIB!", "ok");
       
-      // Ambil kategori dari response backend yang valid
       const verifiedCategory = r.category; 
 
-      localStorage.setItem('mm_bib', bib);
+      localStorage.setItem('mm_bib', combinedBib);
       localStorage.setItem('mm_cat', verifiedCategory);
 
       setTimeout(() => {
         showStatus("", "");
-        showViewAbsensiGPS(bib, verifiedCategory);
+        showViewAbsensiGPS(combinedBib, verifiedCategory);
       }, 1000);
     } else {
       showStatus(`Gagal: ${r.message}`, "err");
