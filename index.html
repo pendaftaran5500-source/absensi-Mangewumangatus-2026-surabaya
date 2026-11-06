@@ -320,7 +320,6 @@ function showStatus(msg, type) {
   st.className = 'status ' + type;
   st.style.display = 'block';
 }
-
 function checkGpxLockStatus() {
   // Batas waktu kunci: 25 Desember 2026 jam 20:59:00
   const lockUntil = new Date('2026-12-25T20:59:00');
@@ -341,9 +340,8 @@ function checkGpxLockStatus() {
   }
 }
 
-// Jalankan fungsi saat halaman selesai dimuat
 window.addEventListener('DOMContentLoaded', checkGpxLockStatus);  
-  
+
 </script>
 
 </body>
