@@ -320,28 +320,6 @@ function showStatus(msg, type) {
   st.className = 'status ' + type;
   st.style.display = 'block';
 }
-function checkGpxLockStatus() {
-  // Batas waktu kunci: 25 Desember 2026 jam 20:59:00
-  const lockUntil = new Date('2026-12-25T20:59:00');
-  const now = new Date();
-  
-  if (now < lockUntil) {
-    const gpxBtn = document.getElementById('btnGpx');
-    if (gpxBtn) {
-      // Mencegah link diklik
-      gpxBtn.style.pointerEvents = 'none';
-      gpxBtn.style.opacity = '0.5';
-      gpxBtn.style.cursor = 'not-allowed';
-      gpxBtn.title = 'Rute GPX akan dibuka pada 25 Desember 2026 pukul 20:59';
-      
-      // Opsional: ubah teksnya sementara jika ingin
-      // gpxBtn.textContent = '🔒 Rute GPX Terkunci (Buka 25 Des)';
-    }
-  }
-}
-
-window.addEventListener('DOMContentLoaded', checkGpxLockStatus);  
-
 </script>
 
 </body>
