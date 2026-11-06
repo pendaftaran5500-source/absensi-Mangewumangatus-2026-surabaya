@@ -167,7 +167,11 @@ async function checkRegIdType() {
   try {
     const res = await fetch(`${SCRIPT_URL}?action=check_category&regId=${encodeURIComponent(regId)}`);
     const r = await res.json();
-    if (r.status === 'success' && r.category && r.category.toLowerCase().includes('pairing')) {
+    
+    const cat = r.category ? r.category.toLowerCase() : '';
+    
+    // Otomatis buka 2 kolom BIB jika kategori mengandung kata 'pairing' ATAU '5km'
+    if (r.status === 'success' && (cat.includes('pairing') || cat.includes('5km'))) {
       groupBibPair.classList.remove('hidden');
       inputBib2.required = true;
     } else {
