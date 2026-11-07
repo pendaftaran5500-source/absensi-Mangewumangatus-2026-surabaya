@@ -37,9 +37,9 @@
 
   <!-- TAMPILAN 1: FORM KLAIM BIB & RACE PACK -->
   <div id="viewKlaimBIB" class="hidden">
-<div class="info-box">
-  <b>Pengambilan Race Pack:</b><br>Masukkan ID Pendaftar Anda. Jika kategori Pairing, sistem otomatis membuka 2 kolom Nomor BIB.
-</div>
+    <div class="info-box">
+      <b>Pengambilan Race Pack:</b><br>Masukkan ID Pendaftar Anda. Jika kategori Pairing, sistem otomatis membuka 2 kolom Nomor BIB.
+    </div>
     <form id="bibForm" onsubmit="handleRegisterCheckin(event)">
       <div class="form-group">
         <label for="inputRegId">ID Pendaftar (contoh: Mm2026sby-0001)</label>
@@ -146,7 +146,6 @@ function showViewAbsensiGPS(bib, category) {
   initCheckInButtons(bib, category);
 }
 
-
 // Fungsi untuk mengecek kategori otomatis berdasarkan ID Pendaftar
 async function checkRegIdType() {
   const regId = document.getElementById('inputRegId').value.trim();
@@ -222,25 +221,6 @@ async function handleRegisterCheckin(e) {
 
     if (r.status === 'success') {
       showStatus("Berhasil mendaftarkan BIB!", "ok");
-      
-      const verifiedCategory = r.category; 
-
-      localStorage.setItem('mm_bib', combinedBib);
-      localStorage.setItem('mm_cat', verifiedCategory);
-
-      setTimeout(() => {
-        showStatus("", "");
-        showViewAbsensiGPS(combinedBib, verifiedCategory);
-      }, 1000);
-    } else {
-      showStatus(`Gagal: ${r.message}`, "err");
-      btn.disabled = false;
-    }
-  } catch (err) {
-    showStatus("Kesalahan koneksi jaringan.", "err");
-    btn.disabled = false;
-  }
-}
       
       const verifiedCategory = r.category; 
 
