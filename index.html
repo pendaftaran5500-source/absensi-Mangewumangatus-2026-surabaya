@@ -220,14 +220,27 @@ async function handleRegisterCheckin(e) {
     let res = await fetch(targetUrl);
     let r = await res.json();
 
-   if (r.status === 'success') {
+    if (r.status === 'success') {
       showStatus("Berhasil mendaftarkan BIB!", "ok");
-      // ... lanjut ke menu absensi
+      
+      const verifiedCategory = r.category; 
+
+      localStorage.setItem('mm_bib', combinedBib);
+      localStorage.setItem('mm_cat', verifiedCategory);
+
+      setTimeout(() => {
+        showStatus("", "");
+        showViewAbsensiGPS(combinedBib, verifiedCategory);
+      }, 1000);
     } else {
-      // Menampilkan pesan error dari backend (misal: "ID sudah terdaftar")
       showStatus(`Gagal: ${r.message}`, "err");
       btn.disabled = false;
     }
+  } catch (err) {
+    showStatus("Kesalahan koneksi jaringan.", "err");
+    btn.disabled = false;
+  }
+}
       
       const verifiedCategory = r.category; 
 
