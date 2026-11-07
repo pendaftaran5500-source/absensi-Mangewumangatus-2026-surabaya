@@ -46,25 +46,15 @@
         <input type="text" id="inputRegId" placeholder="Masukkan ID Pendaftar" oninput="checkRegIdType()" required>
       </div>
       
+      <!-- Kolom BIB Peserta Utama / Orang Tua -->
       <div class="form-group">
-        <label for="inputBIB">Nomor BIB Peserta Utama</label>
+        <label id="labelBibUtama" for="inputBIB">Nomor BIB Peserta Utama</label>
         <input type="text" id="inputBIB" placeholder="Contoh: 501 / A01" required>
       </div>
 
-      <div class="form-group">
-  <label for="inputBIB">Nomor BIB Peserta Utama (Orang Tua)</label>
-  <input type="text" id="inputBIB" placeholder="Contoh: A01" required>
-</div>
-
-<!-- Kolom BIB Kedua khusus Pairing / 5KM -->
-<div class="form-group hidden" id="groupBibPair">
-  <label for="inputBIB2">Nomor BIB Peserta Anak</label>
-  <input type="text" id="inputBIB2" placeholder="Contoh: A02">
-</div>
-
-      <!-- Kolom BIB Kedua khusus Pairing (Hidden secara default) -->
+      <!-- Kolom BIB Kedua khusus Pairing / Parenting (Hidden secara default) -->
       <div class="form-group hidden" id="groupBibPair">
-        <label for="inputBIB2">Nomor BIB Peserta Pasangan</label>
+        <label id="labelBibKedua" for="inputBIB2">Nomor BIB Peserta Pasangan / Anak</label>
         <input type="text" id="inputBIB2" placeholder="Contoh: 502 / A02">
       </div>
 
