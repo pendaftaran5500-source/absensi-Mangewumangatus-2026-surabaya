@@ -156,13 +156,22 @@ function showViewAbsensiGPS(bib, category) {
   initCheckInButtons(bib, category);
 }
 
-// Fungsi opsional untuk mengecek apakah ID yang diketik adalah kategori Pairing
+
+// Fungsi untuk mengecek kategori otomatis berdasarkan ID Pendaftar
 async function checkRegIdType() {
   const regId = document.getElementById('inputRegId').value.trim();
   const groupBibPair = document.getElementById('groupBibPair');
   const inputBib2 = document.getElementById('inputBIB2');
+  const labelBibUtama = document.getElementById('labelBibUtama');
+  const labelBibKedua = document.getElementById('labelBibKedua');
 
-  if (!regId) return;
+  // Jika ID kurang dari 5 karakter, sembunyikan kolom pairing
+  if (regId.length < 5) {
+    groupBibPair.classList.add('hidden');
+    inputBib2.required = false;
+    inputBib2.value = '';
+    return;
+  }
 
   try {
     const res = await fetch(`${SCRIPT_URL}?action=check_category&regId=${encodeURIComponent(regId)}`);
@@ -170,21 +179,30 @@ async function checkRegIdType() {
     
     const cat = r.category ? r.category.toLowerCase() : '';
     
-    // Otomatis buka 2 kolom BIB jika kategori mengandung kata 'pairing' ATAU '5km'
-    if (r.status === 'success' && (cat.includes('pairing') || cat.includes('5km'))) {
+    if (r.status === 'success' && (cat.includes('pairing') || cat.includes('parenting') || cat.includes('5km'))) {
       groupBibPair.classList.remove('hidden');
       inputBib2.required = true;
+      
+      // Sesuaikan label jika kategori Parenting / 5km
+      if (cat.includes('parenting') || cat.includes('5km')) {
+        labelBibUtama.textContent = "Nomor BIB Orang Tua";
+        labelBibKedua.textContent = "Nomor BIB Anak";
+      } else {
+        labelBibUtama.textContent = "Nomor BIB Peserta Utama";
+        labelBibKedua.textContent = "Nomor BIB Peserta Pasangan";
+      }
     } else {
       groupBibPair.classList.add('hidden');
       inputBib2.required = false;
       inputBib2.value = '';
+      if (labelBibUtama) labelBibUtama.textContent = "Nomor BIB Peserta Utama";
     }
   } catch (e) {
-    // Abaikan jika offline / endpoint belum siap, form tetap bisa berjalan
+    // Abaikan jika offline
   }
 }
 
-// Event listener saat halaman dimuat untuk cek ID Pendaftar yang sudah tersimpan
+// Event listener saat halaman dimuat
 window.addEventListener('DOMContentLoaded', () => {
   let regInput = document.getElementById('inputRegId');
   if (regInput && regInput.value.trim() !== '') {
@@ -192,7 +210,7 @@ window.addEventListener('DOMContentLoaded', () => {
   }
 });
 
-// KLAIM BIB (Mendukung input 1 BIB atau 2 BIB jika kategori Pairing)
+// KLAIM BIB (Mendukung input 1 BIB atau 2 BIB jika kategori Pairing / Parenting)
 async function handleRegisterCheckin(e) {
   e.preventDefault();
   const regId = document.getElementById('inputRegId').value.trim();
