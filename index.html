@@ -32,7 +32,8 @@
     .gpx-title { font-size: .85rem; color: #94a3b8; margin-bottom: 8px; }
     .gpx-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
     .btn-gpx { display: block; text-align: center; text-decoration: none; padding: 10px 12px; border-radius: 8px; font-weight: 600; font-size: .88rem; background: #0f172a; color: #38bdf8; border: 1px solid #0284c7; transition: .15s; }
-    .btn-gpx:hover { background: #0284c7; color: #fff; }
+    .btn-gpx:hover:not(.locked) { background: #0284c7; color: #fff; }
+    .btn-gpx.locked { opacity: .45; cursor: not-allowed; pointer-events: none; border-color: #475569; color: #94a3b8; }
     #status { margin-top: 16px; padding: 12px; border-radius: 8px; font-size: .9rem; line-height: 1.45; white-space: pre-line; display: none; }
     .status-ok { display: block !important; background: #052e16; border: 1px solid #16a34a; color: #86efac; }
     .status-warn { display: block !important; background: #422006; border: 1px solid #eab308; color: #fde047; }
@@ -78,10 +79,10 @@
     </div>
 
     <div class="gpx-box">
-      <div class="gpx-title">Unduh Rute GPX</div>
+      <div id="gpxTitle" class="gpx-title">Unduh Rute GPX (Dibuka 25 Des 2026 20:59 WIB)</div>
       <div class="gpx-grid">
-        <a id="btnGpx5KM" class="btn-gpx" href="#" target="_blank" rel="noopener noreferrer">Download GPX 5KM</a>
-        <a id="btnGpx50KM" class="btn-gpx" href="#" target="_blank" rel="noopener noreferrer">Download GPX 50KM</a>
+        <a id="btnGpx5KM" class="btn-gpx locked" href="#" target="_blank" rel="noopener noreferrer" aria-disabled="true" onclick="return handleGpxClick(event, '5KM')">Download GPX 5KM</a>
+        <a id="btnGpx50KM" class="btn-gpx locked" href="#" target="_blank" rel="noopener noreferrer" aria-disabled="true" onclick="return handleGpxClick(event, '50KM')">Download GPX 50KM</a>
       </div>
     </div>
 
@@ -94,6 +95,10 @@
     // Ganti dengan link file GPX asli Anda
     const GPX_5KM_URL = "https://drive.google.com/uc?export=download&id=ID_FILE_GPX_5KM";
     const GPX_50KM_URL = "https://drive.google.com/uc?export=download&id=ID_FILE_GPX_50KM";
+
+    // Tombol GPX dikunci sampai 25 Desember 2026 pukul 20:59 WIB (+07:00)
+    const GPX_UNLOCK_DATE = new Date("2026-12-25T20:59:00+07:00");
+    const TEST_UNLOCK_GPX_BEFORE_DEADLINE = false;
 
     // Jadwal resmi Hari H (WIB +07:00)
     const EVENT_START_DATE = new Date("2026-11-22T05:00:00+07:00");
@@ -116,11 +121,46 @@
     let cachedCategoryText = "";
     let categoryDebounceTimer = null;
 
-    function initGpxLinks() {
+    function isGpxLocked() {
+      if (TEST_UNLOCK_GPX_BEFORE_DEADLINE) return false;
+      return new Date() < GPX_UNLOCK_DATE;
+    }
+
+    function updateGpxButtonState() {
+      const locked = isGpxLocked();
       const link5 = document.getElementById("btnGpx5KM");
       const link50 = document.getElementById("btnGpx50KM");
-      if (link5) link5.href = GPX_5KM_URL;
-      if (link50) link50.href = GPX_50KM_URL;
+      const titleEl = document.getElementById("gpxTitle");
+
+      if (titleEl) {
+        titleEl.textContent = locked
+          ? "Unduh Rute GPX (Terkunci s/d 25 Des 2026 20:59 WIB)"
+          : "Unduh Rute GPX";
+      }
+
+      [
+        { el: link5, url: GPX_5KM_URL },
+        { el: link50, url: GPX_50KM_URL }
+      ].forEach(({ el, url }) => {
+        if (!el) return;
+        el.classList.toggle("locked", locked);
+        el.setAttribute("aria-disabled", locked ? "true" : "false");
+        el.href = locked ? "javascript:void(0)" : url;
+        el.title = locked ? "Unduhan GPX dibuka mulai 25 Desember 2026 pukul 20:59 WIB." : "";
+      });
+    }
+
+    function handleGpxClick(e, categoryLabel) {
+      if (isGpxLocked()) {
+        if (e && e.preventDefault) e.preventDefault();
+        showStatus(
+          `Download GPX ${categoryLabel} masih dikunci hingga 25 Desember 2026 pukul 20:59 WIB.`,
+          "warn"
+        );
+        updateGpxButtonState();
+        return false;
+      }
+      return true;
     }
 
     function showStatus(msg, type = "ok") {
@@ -451,9 +491,12 @@
       await sendToServer(normalizedPoint, bib, coords.lat, coords.lng);
     }
 
-    initGpxLinks();
+    updateGpxButtonState();
     updateStartButtonState();
-    setInterval(updateStartButtonState, 30000);
+    setInterval(() => {
+      updateGpxButtonState();
+      updateStartButtonState();
+    }, 30000);
   </script>
 </body>
 </html>
