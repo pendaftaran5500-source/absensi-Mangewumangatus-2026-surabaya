@@ -83,6 +83,10 @@
     // Ubah ke false saat sudah siap untuk Hari H asli
     const TEST_ALLOW_START_BEFORE_EVENT = true;
 
+    let cachedCategoryRegId = "";
+    let cachedCategoryText = "";
+    let categoryDebounceTimer = null;
+
     function showStatus(msg, type = "ok") {
       const box = document.getElementById("status");
       if (!box) return;
@@ -121,16 +125,72 @@
       return s;
     }
 
-    function checkRegIdType() {
-      const regId = (document.getElementById("inputRegId")?.value || "").trim();
+    function isTwoBibCategory(categoryText) {
+      const c = (categoryText || "").toString().trim().toLowerCase();
+      return c.includes("pairing") || c.includes("parent") || c.includes("5km");
+    }
+
+    function setPairFieldState(categoryText) {
+      const isTwoBib = isTwoBibCategory(categoryText);
       const groupPair = document.getElementById("groupBibPair");
       const bib2Input = document.getElementById("inputBIB2");
+      const pairLabel = groupPair ? groupPair.querySelector("label") : null;
       if (!groupPair || !bib2Input) return;
 
-      const showPair = regId.length >= 5;
-      groupPair.classList.toggle("hidden", !showPair);
-      bib2Input.required = showPair;
-      if (!showPair) bib2Input.value = "";
+      groupPair.classList.toggle("hidden", !isTwoBib);
+      bib2Input.required = false;
+
+      if (pairLabel) {
+        const c = (categoryText || "").toString().toLowerCase();
+        if (c.includes("5km") || c.includes("parent")) {
+          pairLabel.textContent = "Nomor BIB Kedua (Anak / Pasangan 5KM)";
+          bib2Input.placeholder = "Masukkan BIB kedua (misal: A02)";
+        } else {
+          pairLabel.textContent = "Nomor BIB Pasangan / Kedua (Pairing)";
+          bib2Input.placeholder = "Masukkan BIB kedua bila kategori pairing";
+        }
+      }
+
+      if (!isTwoBib) {
+        bib2Input.value = "";
+      }
+    }
+
+    async function checkRegIdType() {
+      const regId = (document.getElementById("inputRegId")?.value || "").trim();
+      if (!regId) {
+        cachedCategoryRegId = "";
+        cachedCategoryText = "";
+        setPairFieldState("");
+        return;
+      }
+
+      if (cachedCategoryRegId.toLowerCase() === regId.toLowerCase()) {
+        setPairFieldState(cachedCategoryText);
+        return;
+      }
+
+      if (regId.length < 4) {
+        setPairFieldState("");
+        return;
+      }
+
+      try {
+        const r = await postToScript({
+          action: "check_category",
+          regId: regId
+        });
+
+        if (r.status === "success" && r.category) {
+          cachedCategoryRegId = regId;
+          cachedCategoryText = String(r.category);
+          setPairFieldState(cachedCategoryText);
+        } else {
+          setPairFieldState("");
+        }
+      } catch (_) {
+        setPairFieldState("");
+      }
     }
 
     function onRegIdInput() {
@@ -141,7 +201,9 @@
         inputDob.required = false;
         inputDob.value = "";
       }
-      checkRegIdType();
+
+      clearTimeout(categoryDebounceTimer);
+      categoryDebounceTimer = setTimeout(checkRegIdType, 350);
     }
 
     async function postToScript(payloadObj) {
@@ -186,11 +248,7 @@
         return;
       }
 
-      if (bib2El && !bib2El.closest(".hidden") && bib2El.required) {
-        if (!bib2) {
-          showStatus("Lengkapi Nomor BIB kedua bila kategori pairing.", "err");
-          return;
-        }
+      if (bib2El && !bib2El.closest(".hidden") && bib2) {
         if (bib1 === bib2) {
           showStatus("Nomor BIB pertama dan kedua tidak boleh sama.", "err");
           return;
