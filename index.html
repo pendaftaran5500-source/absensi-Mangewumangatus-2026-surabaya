@@ -1,171 +1,443 @@
-function linkParticipantToCheckin(data) {
-  const lock = LockService.getScriptLock();
-  if (!lock.tryLock(10000)) {
-    return { status: "error", message: "Server sedang sibuk, coba beberapa saat lagi." };
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mangewumangatus 2026 - Portal Peserta</title>
+  <style>
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f4f6f8; margin: 0; padding: 20px; color: #1e293b; }
+    .card { background: #ffffff; max-width: 480px; margin: 10px auto; padding: 24px; border-radius: 16px; border: 1px solid #e2e8f0; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.05); }
+    h2 { text-align: center; color: #0f766e; margin-top: 0; font-size: 22px; }
+    .subtitle { text-align: center; font-size: 14px; color: #64748b; margin-top: -10px; margin-bottom: 20px; }
+    .btn { display: block; width: 100%; padding: 14px; margin: 10px 0; border: 0; border-radius: 10px; font-size: 15px; font-weight: 600; cursor: pointer; color: white; background: #0f766e; text-align: center; box-sizing: border-box; text-decoration: none; transition: background 0.2s; }
+    .btn:hover { background: #115e59; }
+    .btn:disabled { background: #cbd5e1 !important; cursor: not-allowed; color: #64748b; }
+    .btn-gpx { background: #2563eb; }
+    .btn-gpx:hover { background: #1d4ed8; }
+    .btn-dnf { background: #dc2626; margin-top: 18px; }
+    .btn-dnf:hover { background: #b91c1c; }
+    .btn-outline { background: transparent; border: 1px solid #cbd5e1; color: #64748b; font-size: 12px; padding: 8px; margin-top: 20px; }
+    .form-group { margin-bottom: 16px; text-align: left; }
+    label { font-weight: 600; font-size: 13px; display: block; margin-bottom: 6px; color: #334155; }
+    input, select { width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 15px; box-sizing: border-box; outline: none; }
+    input:focus, select:focus { border-color: #0f766e; }
+    .status { padding: 12px; border-radius: 8px; display: none; margin-bottom: 15px; text-align: center; font-weight: 600; font-size: 14px; }
+    .ok { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+    .warn { background: #fef9c3; color: #854d0e; border: 1px solid #fef08a; }
+    .err { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+    .hidden { display: none !important; }
+    .info-box { background: #f1f5f9; padding: 14px; border-radius: 10px; margin-bottom: 20px; font-size: 14px; border-left: 4px solid #0f766e; }
+    .divider { height: 1px; background: #e2e8f0; margin: 20px 0; }
+  </style>
+</head>
+<body>
+
+<div class="card">
+  <h2 id="pageTitle">Mangewumangatus 2026</h2>
+  <div class="subtitle" id="pageSubtitle">Portal Layanan Peserta</div>
+  <div id="status" class="status"></div>
+
+  <!-- TAMPILAN 1: FORM KLAIM BIB & RACE PACK -->
+  <div id="viewKlaimBIB" class="hidden">
+    <div class="info-box">
+      <b>Pengambilan Race Pack:</b><br>Masukkan ID Pendaftar Anda. Jika kategori Pairing / Parenting, sistem otomatis membuka 2 kolom Nomor BIB.
+    </div>
+    <form id="bibForm" onsubmit="handleRegisterCheckin(event)">
+      <div class="form-group">
+        <label for="inputRegId">ID Pendaftar (contoh: Mm2026sby-0001)</label>
+        <input type="text" id="inputRegId" placeholder="Masukkan ID Pendaftar" oninput="onRegIdInput()" required>
+      </div>
+
+      <div class="form-group">
+        <label id="labelBibUtama" for="inputBIB">Nomor BIB Peserta Utama</label>
+        <input type="text" id="inputBIB" placeholder="Contoh: 501 / B01 / A01" required>
+      </div>
+
+      <div class="form-group hidden" id="groupBibPair">
+        <label id="labelBibKedua" for="inputBIB2">Nomor BIB Peserta Pasangan / Anak</label>
+        <input type="text" id="inputBIB2" placeholder="Contoh: 502 / A02">
+      </div>
+
+      <div class="form-group hidden" id="groupVerifyDob">
+        <label for="inputDob">Verifikasi Tanggal Lahir (ID sudah pernah diklaim)</label>
+        <input type="date" id="inputDob">
+      </div>
+
+      <button type="submit" id="btnSubmitBib" class="btn">Simpan BIB &amp; Lanjut Ke Menu Absensi</button>
+    </form>
+  </div>
+
+  <!-- TAMPILAN 2: MENU ABSENSI GPS & GPX -->
+  <div id="viewAbsensiGPS" class="hidden">
+    <div id="infoPeserta" class="info-box">Memuat data peserta...</div>
+
+    <div id="gpxContainer">
+      <a id="btnGpx" href="#" target="_blank" class="btn btn-gpx">🗺️ Download Rute GPX</a>
+    </div>
+
+    <div class="divider"></div>
+    <div style="font-weight: bold; margin-bottom: 10px; font-size: 14px; text-align: center;">Menu Absensi Check-In GPS</div>
+
+    <div id="buttons"></div>
+
+    <button onclick="resetStoredBib()" class="btn btn-outline">Ganti / Edit Nomor BIB</button>
+  </div>
+</div>
+
+<script>
+// URL WEB APP GOOGLE APPS SCRIPT PROYEK CHECK-IN TERBARU
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwvfqdkMDVc4AJ9-ROWFbB3BRGoEYp37U7JSvhveVguztpSOAyLH0_hXDNpWVr-hUzn/exec";
+
+// TANGGAL RESMI EVENT (Format: YYYY-MM-DD)
+const EVENT_DATE = "2026-12-26";
+
+// LINK GPX PANITIA (Ganti dengan URL download/view file GPX asli)
+const GPX_LINKS = {
+  "50km": "https://example.com/rute-50km.gpx",
+  "5km":  "https://example.com/rute-5km.gpx"
+};
+
+// KOORDINAT CP & RADIUS (Meter) - Sesuaikan dengan titik resmi event
+const CP_COORDINATES = {
+  "start":  { lat: -7.2575, lng: 112.7521, radius: 200 },
+  "cp1":    { lat: -7.4500, lng: 112.4300, radius: 500 },
+  "cp2":    { lat: -7.7800, lng: 112.0100, radius: 500 },
+  "cp3":    { lat: -8.1100, lng: 115.1200, radius: 500 },
+  "finish": { lat: -7.2575, lng: 112.7521, radius: 300 }
+};
+
+const urlParams = new URLSearchParams(window.location.search);
+let currentBib = urlParams.get("bib") || localStorage.getItem("mm_bib") || "";
+let currentCategory = urlParams.get("cat") || localStorage.getItem("mm_cat") || "";
+
+const viewKlaimBIB = document.getElementById("viewKlaimBIB");
+const viewAbsensiGPS = document.getElementById("viewAbsensiGPS");
+const pageSubtitle = document.getElementById("pageSubtitle");
+
+if (!currentBib) {
+  showViewKlaimBIB();
+} else {
+  showViewAbsensiGPS(currentBib, currentCategory);
+}
+
+function showViewKlaimBIB() {
+  pageSubtitle.textContent = "Pengambilan Race Pack & Klaim BIB";
+  viewKlaimBIB.classList.remove("hidden");
+  viewAbsensiGPS.classList.add("hidden");
+}
+
+function showViewAbsensiGPS(bib, category) {
+  pageSubtitle.textContent = "Absensi Check-In & Track GPX";
+  viewKlaimBIB.classList.add("hidden");
+  viewAbsensiGPS.classList.remove("hidden");
+
+  localStorage.setItem("mm_bib", bib);
+  localStorage.setItem("mm_cat", category);
+
+  const catText = category ? category.toUpperCase() : "-";
+  document.getElementById("infoPeserta").innerHTML = `<b>No. BIB:</b> ${escapeHtml(bib)} &nbsp;|&nbsp; <b>Kategori:</b> ${escapeHtml(catText)}`;
+
+  const gpxContainer = document.getElementById("gpxContainer");
+  const catLower = (category || "").toLowerCase();
+
+  if (catLower.includes("500")) {
+    gpxContainer.innerHTML = `<div style="background:#fef9c3; color:#854d0e; padding:12px; border-radius:8px; font-size:13px; text-align:center; border:1px solid #fef08a;"><b>Info GPX:</b> Kategori 500KM menggunakan rute mandiri yang Anda tentukan sendiri.</div>`;
+  } else {
+    const gpxKey = catLower.includes("50") ? "50km" : (catLower.includes("5") ? "5km" : catLower);
+    const gpxUrl = GPX_LINKS[gpxKey] || "#";
+
+    // Batas waktu kunci GPX: 25 Desember 2026 jam 20:59:00 WIB
+    const lockUntil = new Date("2026-12-25T20:59:00+07:00");
+    const now = new Date();
+
+    if (now < lockUntil) {
+      gpxContainer.innerHTML = `<a id="btnGpx" href="#" class="btn btn-gpx" style="pointer-events: none; opacity: 0.5; cursor: not-allowed;" title="Rute GPX akan dibuka pada 25 Desember 2026 pukul 20:59 WIB">🔒 Rute GPX ${escapeHtml(catText)} (Dibuka 25 Des 20:59 WIB)</a>`;
+    } else {
+      gpxContainer.innerHTML = `<a id="btnGpx" href="${escapeHtml(gpxUrl)}" target="_blank" rel="noopener" class="btn btn-gpx">🗺️ Download Rute GPX (${escapeHtml(catText)})</a>`;
+    }
+  }
+
+  initCheckInButtons(bib, category);
+}
+
+function onRegIdInput() {
+  const groupDob = document.getElementById("groupVerifyDob");
+  const inputDob = document.getElementById("inputDob");
+  if (groupDob && inputDob) {
+    groupDob.classList.add("hidden");
+    inputDob.required = false;
+    inputDob.value = "";
+  }
+  checkRegIdType();
+}
+
+async function checkRegIdType() {
+  const regId = document.getElementById("inputRegId").value.trim();
+  const groupBibPair = document.getElementById("groupBibPair");
+  const inputBib2 = document.getElementById("inputBIB2");
+  const labelBibUtama = document.getElementById("labelBibUtama");
+  const labelBibKedua = document.getElementById("labelBibKedua");
+
+  if (regId.length < 5) {
+    groupBibPair.classList.add("hidden");
+    inputBib2.required = false;
+    inputBib2.value = "";
+    return;
   }
 
   try {
-    initCategorySheets();
+    const res = await fetch(`${SCRIPT_URL}?action=check_category&regId=${encodeURIComponent(regId)}`);
+    const r = await res.json();
 
-    if (!data || !data.regId || !data.bib) {
-      return { status: "error", message: "Data pendaftaran atau nomor BIB tidak lengkap!" };
-    }
+    const cat = r.category ? r.category.toLowerCase() : "";
 
-    const ssReg = SpreadsheetApp.openById(CONFIG.SPREADSHEET_PENDAFTARAN_ID);
-    const sheetReg = ssReg.getSheetByName(CONFIG.SHEET_NAME_PENDAFTARAN);
-    const rowsReg = sheetReg.getDataRange().getValues();
+    if (r.status === "success" && (cat.includes("pairing") || cat.includes("parenting") || cat.includes("parent") || cat.includes("5km"))) {
+      groupBibPair.classList.remove("hidden");
+      inputBib2.required = true;
 
-    const headers = rowsReg[0].map(h => h.toString().trim().toLowerCase());
-    const colId = headers.findIndex(h => h.includes("id pendaftar"));
-    const colName = headers.findIndex(h => h.includes("nama utama") || h === "nama");
-    const colPairName = headers.findIndex(h => h.includes("nama pasangan") || h.includes("nama partner"));
-    const colChildName = headers.findIndex(h => h.includes("nama anak"));
-    const colCategory = headers.findIndex(h => h.includes("kategori"));
-    const colDob = headers.findIndex(h => h.includes("tanggal lahir") || h.includes("tgl lahir"));
-
-    let targetName = "";
-    let pairName = "";
-    let childName = "";
-    let targetCategory = "";
-    let matchedRegId = "";
-    let sheetDob = "";
-    const cleanRegId = data.regId.toString().trim().toLowerCase();
-    const inputDob = normalizeBirthDate_(data.dob || "");
-
-    for (let i = 1; i < rowsReg.length; i++) {
-      const rowId = rowsReg[i][colId] ? rowsReg[i][colId].toString().trim() : "";
-      if (rowId.toLowerCase() === cleanRegId) {
-        matchedRegId = rowId;
-        targetName = rowsReg[i][colName] ? rowsReg[i][colName].toString().trim() : "";
-        if (colPairName !== -1 && rowsReg[i][colPairName]) {
-          pairName = rowsReg[i][colPairName].toString().trim();
-        }
-        if (colChildName !== -1 && rowsReg[i][colChildName]) {
-          childName = rowsReg[i][colChildName].toString().trim();
-        }
-        if (colCategory !== -1 && rowsReg[i][colCategory]) {
-          targetCategory = rowsReg[i][colCategory].toString().trim();
-        }
-        if (colDob !== -1 && rowsReg[i][colDob]) {
-          sheetDob = normalizeBirthDate_(rowsReg[i][colDob]);
-        }
-        break;
+      if (cat.includes("parenting") || cat.includes("parent") || cat.includes("5km")) {
+        labelBibUtama.textContent = "Nomor BIB Orang Tua";
+        labelBibKedua.textContent = "Nomor BIB Anak";
+      } else {
+        labelBibUtama.textContent = "Nomor BIB Peserta Utama";
+        labelBibKedua.textContent = "Nomor BIB Peserta Pasangan";
       }
-    }
-
-    if (!matchedRegId || !targetName) {
-      return { status: "error", message: "ID Pendaftar tidak ditemukan di database pendaftaran!" };
-    }
-    if (!targetCategory) {
-      return { status: "error", message: "Kategori peserta tidak ditemukan di database pendaftaran!" };
-    }
-
-    const cleanBib = data.bib.toString().trim().toUpperCase().replace(/\s*&\s*/g, " & ");
-    const bibTokens = cleanBib.split("&").map(b => b.trim()).filter(Boolean);
-    const catLower = targetCategory.toLowerCase();
-    const isPairing = catLower.includes("pairing");
-    const isParenting = catLower.includes("parent") || catLower.includes("5km");
-
-    let displayName = targetName;
-    if (isPairing && pairName) {
-      displayName = `${targetName} & ${pairName}`;
-    } else if (isParenting && childName) {
-      displayName = `${targetName} & ${childName}`;
-    }
-
-    const ssCheckin = SpreadsheetApp.openById(CONFIG.SPREADSHEET_CHECKIN_ID);
-    const sheetName = catLower.includes("500")
-      ? "Checkin_500KM"
-      : (catLower.includes("50") ? "Checkin_50KM" : "Checkin_5KM");
-    const sheetCheckin = ssCheckin.getSheetByName(sheetName);
-    const existingRows = sheetCheckin.getDataRange().getValues();
-
-    // 1. Cek apakah ID Pendaftar sudah pernah diklaim sebelumnya
-    for (let i = 1; i < existingRows.length; i++) {
-      const existingBibStr = existingRows[i][0] ? existingRows[i][0].toString().trim().toUpperCase() : "";
-      const existingRegId = existingRows[i][2] ? existingRows[i][2].toString().trim().toLowerCase() : "";
-
-      if (existingRegId === matchedRegId.toLowerCase()) {
-        if (!inputDob) {
-          return {
-            status: "need_dob",
-            message: `ID Pendaftar ${matchedRegId} sudah pernah diklaim. Masukkan Tanggal Lahir untuk memulihkan akses absensi.`
-          };
-        }
-        if (!sheetDob || sheetDob !== inputDob) {
-          return {
-            status: "error",
-            message: "Tanggal lahir tidak cocok dengan data pendaftaran. Hubungi panitia jika perlu bantuan."
-          };
-        }
-        return {
-          status: "success",
-          message: `Verifikasi berhasil! Memulihkan sesi BIB ${existingBibStr}...`,
-          bib: existingBibStr,
-          category: targetCategory
-        };
-      }
-    }
-
-    // 2. Validasi format & rentang nomor BIB untuk klaim baru
-    if (catLower.includes("500")) {
-      for (const singleBib of bibTokens) {
-        const num = parseInt(singleBib, 10);
-        if (!/^\d+$/.test(singleBib) || isNaN(num) || num < 501 || num > 599) {
-          return {
-            status: "error",
-            message: "ID Anda terdaftar di kategori 500KM. Nomor BIB wajib menggunakan rentang angka 501 sampai 599!"
-          };
-        }
-      }
-    } else if (catLower.includes("50") && !catLower.includes("500")) {
-      const regexB = /^B(0[1-9]|[1-9][0-9])$/;
-      for (const singleBib of bibTokens) {
-        if (!regexB.test(singleBib)) {
-          return {
-            status: "error",
-            message: "ID Anda terdaftar di kategori 50KM. Nomor BIB wajib berformat B01 sampai B99!"
-          };
-        }
-      }
-    } else if (catLower.includes("5") && !catLower.includes("50")) {
-      const regexA = /^A(0[1-9]|[1-9][0-9])$/;
-      for (const singleBib of bibTokens) {
-        if (!regexA.test(singleBib)) {
-          return {
-            status: "error",
-            message: "ID Anda terdaftar di kategori 5KM. Nomor BIB wajib berformat A01 sampai A99!"
-          };
-        }
-      }
-    }
-
-    // 3. Cek apakah nomor BIB sudah dipakai peserta lain
-    for (let i = 1; i < existingRows.length; i++) {
-      const existingBibStr = existingRows[i][0] ? existingRows[i][0].toString().trim().toUpperCase() : "";
-      const existingTokens = existingBibStr.split("&").map(b => b.trim()).filter(Boolean);
-      for (const token of bibTokens) {
-        if (existingTokens.includes(token)) {
-          return {
-            status: "error",
-            message: `Nomor BIB ${token} sudah terdaftar di sistem check-in!`
-          };
-        }
-      }
-    }
-
-    if (sheetName === "Checkin_500KM") {
-      sheetCheckin.appendRow(["'" + cleanBib, displayName, matchedRegId, "", "", "", "", "", "", "", "", "", "", "", ""]);
     } else {
-      sheetCheckin.appendRow(["'" + cleanBib, displayName, matchedRegId, "", "", ""]);
+      groupBibPair.classList.add("hidden");
+      inputBib2.required = false;
+      inputBib2.value = "";
+      if (labelBibUtama) labelBibUtama.textContent = "Nomor BIB Peserta Utama";
     }
-
-    return {
-      status: "success",
-      message: `BIB ${cleanBib} atas nama ${displayName} berhasil didaftarkan!`,
-      category: targetCategory
-    };
-  } finally {
-    lock.releaseLock();
+  } catch (e) {
+    // Abaikan jika gagal memeriksa saat mengetik
   }
 }
+
+window.addEventListener("DOMContentLoaded", () => {
+  const regInput = document.getElementById("inputRegId");
+  if (regInput && regInput.value.trim() !== "") {
+    checkRegIdType();
+  }
+});
+
+async function handleRegisterCheckin(e) {
+  e.preventDefault();
+  const regId = document.getElementById("inputRegId").value.trim();
+  const bib = document.getElementById("inputBIB").value.trim();
+  const bib2 = document.getElementById("inputBIB2").value.trim();
+  const groupDob = document.getElementById("groupVerifyDob");
+  const dobInput = document.getElementById("inputDob");
+  const dob = dobInput ? dobInput.value.trim() : "";
+  const btn = document.getElementById("btnSubmitBib");
+
+  if (!regId || !bib) {
+    showStatus("Harap isi ID Pendaftar dan Nomor BIB Utama!", "err");
+    return;
+  }
+
+  if (groupDob && !groupDob.classList.contains("hidden") && !dob) {
+    showStatus("Silakan masukkan Tanggal Lahir untuk memverifikasi kepemilikan ID!", "warn");
+    return;
+  }
+
+  const combinedBib = bib2 ? `${bib} & ${bib2}` : bib;
+
+  btn.disabled = true;
+  showStatus("Memverifikasi ID & Nomor BIB...", "warn");
+
+  try {
+    let targetUrl = `${SCRIPT_URL}?action=register_checkin&regId=${encodeURIComponent(regId)}&bib=${encodeURIComponent(combinedBib)}`;
+    if (dob) {
+      targetUrl += `&dob=${encodeURIComponent(dob)}`;
+    }
+
+    const res = await fetch(targetUrl);
+    const r = await res.json();
+
+    if (r.status === "need_dob") {
+      if (groupDob && dobInput) {
+        groupDob.classList.remove("hidden");
+        dobInput.required = true;
+        dobInput.focus();
+      }
+      showStatus(r.message || "ID sudah pernah diklaim. Masukkan Tanggal Lahir untuk memulihkan sesi.", "warn");
+      btn.disabled = false;
+      return;
+    }
+
+    if (r.status === "success") {
+      const finalBib = r.bib || combinedBib;
+      const verifiedCategory = r.category || "";
+
+      showStatus(r.message || "Berhasil mendaftarkan BIB!", "ok");
+      localStorage.setItem("mm_bib", finalBib);
+      localStorage.setItem("mm_cat", verifiedCategory);
+
+      setTimeout(() => {
+        showStatus("", "");
+        btn.disabled = false;
+        showViewAbsensiGPS(finalBib, verifiedCategory);
+      }, 900);
+    } else {
+      const cleanMsg = String(r.message || "Proses gagal.").replace(/^Gagal:\s*/i, "");
+      showStatus(`Gagal: ${cleanMsg}`, "err");
+      btn.disabled = false;
+    }
+  } catch (err) {
+    showStatus("Kesalahan koneksi jaringan.", "err");
+    btn.disabled = false;
+  }
+}
+
+function initCheckInButtons(bib, category) {
+  const now = new Date();
+  const today = now.getFullYear() + "-" +
+    String(now.getMonth() + 1).padStart(2, "0") + "-" +
+    String(now.getDate()).padStart(2, "0");
+
+  const is500 = (category || "").toLowerCase().includes("500");
+
+  const points = is500
+    ? [
+        { key: "start",  label: "🚩 Check-in START" },
+        { key: "cp1",    label: "📍 Check-in CP 1" },
+        { key: "cp2",    label: "📍 Check-in CP 2" },
+        { key: "cp3",    label: "📍 Check-in CP 3" },
+        { key: "finish", label: "🏁 Check-in FINISH" },
+        { key: "dnf",    label: "🛑 Lapor DNF (Berhenti)", isDnf: true }
+      ]
+    : [
+        { key: "start",  label: "🚩 Check-in START" },
+        { key: "finish", label: "🏁 Check-in FINISH" }
+      ];
+
+  const buttonsDiv = document.getElementById("buttons");
+  buttonsDiv.innerHTML = "";
+
+  points.forEach(p => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = p.isDnf ? "btn btn-dnf" : "btn";
+    btn.textContent = p.label;
+
+    if (p.key === "start" && today !== EVENT_DATE) {
+      btn.disabled = true;
+      btn.textContent = `🔒 START (Dibuka ${EVENT_DATE})`;
+    } else {
+      btn.onclick = () => handleCheckInWithGPS(p.key, bib, Boolean(p.isDnf));
+    }
+
+    buttonsDiv.appendChild(btn);
+  });
+}
+
+async function handleCheckInWithGPS(pointKey, bib, isDnf) {
+  const confirmMsg = isDnf
+    ? `Konfirmasi LAPOR DNF (berhenti di tengah rute) untuk BIB ${bib}? Status DNF bersifat final dan menghentikan check-in lanjutan.`
+    : `Konfirmasi Check-in ${pointKey.toUpperCase()} untuk BIB ${bib}?`;
+
+  if (!confirm(confirmMsg)) return;
+  showStatus("Mendeteksi posisi GPS...", "warn");
+
+  if (!navigator.geolocation) {
+    if (isDnf) {
+      sendToServer(pointKey, bib, "", "");
+      return;
+    }
+    showStatus("Browser tidak mendukung GPS.", "err");
+    return;
+  }
+
+  navigator.geolocation.getCurrentPosition(
+    (position) => {
+      const userLat = position.coords.latitude;
+      const userLng = position.coords.longitude;
+
+      if (isDnf) {
+        sendToServer(pointKey, bib, userLat, userLng);
+        return;
+      }
+
+      const targetCP = CP_COORDINATES[pointKey];
+      if (!targetCP) {
+        showStatus("Koordinat titik check-in belum dikonfigurasi.", "err");
+        return;
+      }
+
+      const distance = calculateDistance(userLat, userLng, targetCP.lat, targetCP.lng);
+      if (distance > targetCP.radius) {
+        showStatus(`Gagal! Jarak Anda ${Math.round(distance)}m dari titik CP (Max: ${targetCP.radius}m).`, "err");
+        return;
+      }
+
+      sendToServer(pointKey, bib, userLat, userLng);
+    },
+    () => {
+      if (isDnf) {
+        sendToServer(pointKey, bib, "", "");
+      } else {
+        showStatus("Gagal mendeteksi GPS. Pastikan izin lokasi aktif.", "err");
+      }
+    },
+    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+  );
+}
+
+function calculateDistance(lat1, lon1, lat2, lon2) {
+  const R = 6371e3;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+  return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+}
+
+async function sendToServer(pointKey, bib, lat, lng) {
+  try {
+    const query =
+      `action=checkin` +
+      `&bib=${encodeURIComponent(bib)}` +
+      `&point=${encodeURIComponent(pointKey)}` +
+      `&lat=${encodeURIComponent(lat ?? "")}` +
+      `&lng=${encodeURIComponent(lng ?? "")}`;
+
+    const res = await fetch(`${SCRIPT_URL}?${query}`);
+    const r = await res.json();
+    showStatus(r.message, r.status === "success" ? "ok" : "err");
+  } catch (e) {
+    showStatus("Koneksi terputus ke server.", "err");
+  }
+}
+
+function resetStoredBib() {
+  if (confirm("Apakah Anda ingin mengganti data Nomor BIB pada perangkat ini?")) {
+    localStorage.removeItem("mm_bib");
+    localStorage.removeItem("mm_cat");
+    window.location.href = window.location.pathname;
+  }
+}
+
+function showStatus(msg, type) {
+  const st = document.getElementById("status");
+  if (!msg) {
+    st.style.display = "none";
+    st.textContent = "";
+    return;
+  }
+  st.textContent = msg;
+  st.className = "status " + type;
+  st.style.display = "block";
+}
+
+function escapeHtml(str) {
+  return String(str || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+</script>
+
+</body>
+</html>
