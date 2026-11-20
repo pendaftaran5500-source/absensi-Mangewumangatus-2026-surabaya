@@ -108,16 +108,79 @@
   </div>
 
   <script>
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxquVvOjbBq0575d24B0_03lfnSuMllgbJeQblNJFYeaQPF07rUGDI7KLakQD0aRnyB/exec";
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx0PkkCZFWL7DJtW3Vm8_YTMnmjHWe6HUwSb9g6FFh0cZtfEdG_pZWBjdOO_Oc6sZQR/exec";
     const STORAGE_KEY = "mm2026_sby_checkin_session";
 
-    // Ganti dengan link file GPX asli Anda
-    const GPX_5KM_URL = "https://drive.google.com/uc?export=download&id=ID_FILE_GPX_5KM";
-    const GPX_50KM_URL = "https://drive.google.com/uc?export=download&id=ID_FILE_GPX_50KM";
+       // --- GPX (SERVER-SIDE) & START LOCK ---
+    let serverGpxState = {
+      unlocked: false,
+      gpx5km: "",
+      gpx50km: "",
+      message: "Unduhan GPX masih dikunci hingga jadwal pembukaan resmi."
+    };
 
-    // Tombol GPX dikunci sampai 25 Desember 2026 pukul 20:59 WIB (+07:00)
-    const GPX_UNLOCK_DATE = new Date("2026-12-25T20:59:00+07:00");
-    const TEST_UNLOCK_GPX_BEFORE_DEADLINE = false;
+    function updateGpxButtonState() {
+      const locked = !serverGpxState.unlocked;
+      const link5 = document.getElementById("btnGpx5KM");
+      const link50 = document.getElementById("btnGpx50KM");
+      const titleEl = document.getElementById("gpxTitle");
+
+      if (titleEl) {
+        titleEl.textContent = locked
+          ? "Unduh Rute GPX (Terkunci oleh Server)"
+          : "Unduh Rute GPX";
+      }
+
+      [
+        { el: link5, url: serverGpxState.gpx5km },
+        { el: link50, url: serverGpxState.gpx50km }
+      ].forEach(({ el, url }) => {
+        if (!el) return;
+        const isDisabled = locked || !url;
+        el.classList.toggle("locked", isDisabled);
+        el.setAttribute("aria-disabled", isDisabled ? "true" : "false");
+        el.href = isDisabled ? "javascript:void(0)" : url;
+        el.title = isDisabled ? serverGpxState.message : "";
+      });
+    }
+
+    async function syncGpxFromServer() {
+      try {
+        const r = await postToScript({ action: "get_gpx" });
+        if (r.status === "success" && r.gpx5km && r.gpx50km) {
+          serverGpxState = {
+            unlocked: true,
+            gpx5km: r.gpx5km,
+            gpx50km: r.gpx50km,
+            message: ""
+          };
+        } else {
+          serverGpxState = {
+            unlocked: false,
+            gpx5km: "",
+            gpx50km: "",
+            message: r.message || "Unduhan GPX masih dikunci hingga jadwal pembukaan resmi."
+          };
+        }
+      } catch (_) {
+        // Jika offline/gagal konek, pertahankan status terkunci saat ini
+      }
+      updateGpxButtonState();
+    }
+
+    function handleGpxClick(e, categoryLabel) {
+      if (!serverGpxState.unlocked) {
+        if (e && e.preventDefault) e.preventDefault();
+        showStatus(
+          `Download GPX ${categoryLabel}: ${serverGpxState.message}`,
+          "warn"
+        );
+        syncGpxFromServer();
+        return false;
+      }
+      return true;
+    }
+
 
     // Jadwal resmi Hari H (WIB +07:00)
     const EVENT_START_DATE = new Date("2026-11-22T05:00:00+07:00");
@@ -704,16 +767,19 @@
       }
     }
 
-    // --- INIT ---
+       // --- INIT ---
     loadSavedSession();
     updateGpxButtonState();
+    syncGpxFromServer();
     updateStartButtonState();
     updatePointButtonsByCategory();
 
     setInterval(() => {
-      updateGpxButtonState();
+      if (!serverGpxState.unlocked) {
+        syncGpxFromServer();
+      }
       updateStartButtonState();
-    }, 30000);
+    }, 60000);
   </script>
 </body>
 </html>
