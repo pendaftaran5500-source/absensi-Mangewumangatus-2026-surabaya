@@ -28,6 +28,11 @@
     .btn-finish:hover:not(:disabled) { background: #1d4ed8; }
     .btn-dnf { grid-column: span 2; background: #be123c; color: #fff; }
     .btn-dnf:hover:not(:disabled) { background: #9f1239; }
+    .gpx-box { margin-top: 16px; padding-top: 14px; border-top: 1px solid #334155; }
+    .gpx-title { font-size: .85rem; color: #94a3b8; margin-bottom: 8px; }
+    .gpx-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+    .btn-gpx { display: block; text-align: center; text-decoration: none; padding: 10px 12px; border-radius: 8px; font-weight: 600; font-size: .88rem; background: #0f172a; color: #38bdf8; border: 1px solid #0284c7; transition: .15s; }
+    .btn-gpx:hover { background: #0284c7; color: #fff; }
     #status { margin-top: 16px; padding: 12px; border-radius: 8px; font-size: .9rem; line-height: 1.45; white-space: pre-line; display: none; }
     .status-ok { display: block !important; background: #052e16; border: 1px solid #16a34a; color: #86efac; }
     .status-warn { display: block !important; background: #422006; border: 1px solid #eab308; color: #fde047; }
@@ -72,20 +77,51 @@
       <button id="btnDnf" type="button" class="btn-point btn-dnf" onclick="triggerCheckin('dnf')">LAPOR DNF</button>
     </div>
 
+    <div class="gpx-box">
+      <div class="gpx-title">Unduh Rute GPX</div>
+      <div class="gpx-grid">
+        <a id="btnGpx5KM" class="btn-gpx" href="#" target="_blank" rel="noopener noreferrer">Download GPX 5KM</a>
+        <a id="btnGpx50KM" class="btn-gpx" href="#" target="_blank" rel="noopener noreferrer">Download GPX 50KM</a>
+      </div>
+    </div>
+
     <div id="status"></div>
   </div>
 
   <script>
     const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxquVvOjbBq0575d24B0_03lfnSuMllgbJeQblNJFYeaQPF07rUGDI7KLakQD0aRnyB/exec";
 
+    // Ganti dengan link file GPX asli Anda
+    const GPX_5KM_URL = "https://drive.google.com/uc?export=download&id=ID_FILE_GPX_5KM";
+    const GPX_50KM_URL = "https://drive.google.com/uc?export=download&id=ID_FILE_GPX_50KM";
+
     // Jadwal resmi Hari H (WIB +07:00)
     const EVENT_START_DATE = new Date("2026-11-22T05:00:00+07:00");
     // Ubah ke false saat sudah siap untuk Hari H asli
     const TEST_ALLOW_START_BEFORE_EVENT = true;
 
+    // Cross-check GPS: set true untuk mewajibkan peserta berada dalam radius tiap titik
+    const GPS_CHECK_ENABLED = true;
+
+    // Sesuaikan lat, lng, dan maxDistanceMeters (dalam meter) untuk tiap titik
+    const CHECKIN_COORDS = {
+      start:  { label: "START",  lat: -7.2575, lng: 112.7521, maxDistanceMeters: 500 },
+      cp1:    { label: "CP 1",   lat: -7.2575, lng: 112.7521, maxDistanceMeters: 500 },
+      cp2:    { label: "CP 2",   lat: -7.2575, lng: 112.7521, maxDistanceMeters: 500 },
+      cp3:    { label: "CP 3",   lat: -7.2575, lng: 112.7521, maxDistanceMeters: 500 },
+      finish: { label: "FINISH", lat: -7.2575, lng: 112.7521, maxDistanceMeters: 500 }
+    };
+
     let cachedCategoryRegId = "";
     let cachedCategoryText = "";
     let categoryDebounceTimer = null;
+
+    function initGpxLinks() {
+      const link5 = document.getElementById("btnGpx5KM");
+      const link50 = document.getElementById("btnGpx50KM");
+      if (link5) link5.href = GPX_5KM_URL;
+      if (link50) link50.href = GPX_50KM_URL;
+    }
 
     function showStatus(msg, type = "ok") {
       const box = document.getElementById("status");
@@ -298,18 +334,71 @@
       }
     }
 
+    function calculateDistanceMeters_(lat1, lng1, lat2, lng2) {
+      const toRad = (deg) => (deg * Math.PI) / 180;
+      const R = 6371000;
+      const dLat = toRad(lat2 - lat1);
+      const dLng = toRad(lng2 - lng1);
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+        Math.sin(dLng / 2) * Math.sin(dLng / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return R * c;
+    }
+
     function getCurrentLocation() {
       return new Promise((resolve) => {
         if (!navigator.geolocation) {
-          resolve({ lat: "", lng: "" });
+          resolve({ lat: "", lng: "", error: "Perangkat tidak mendukung GPS / Geolocation." });
           return;
         }
         navigator.geolocation.getCurrentPosition(
-          (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-          () => resolve({ lat: "", lng: "" }),
-          { enableHighAccuracy: true, timeout: 6000, maximumAge: 15000 }
+          (pos) => resolve({
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude,
+            error: ""
+          }),
+          (err) => resolve({
+            lat: "",
+            lng: "",
+            error: err && err.code === 1
+              ? "Izin lokasi GPS ditolak. Aktifkan izin lokasi di browser."
+              : "Gagal membaca koordinat GPS. Pastikan GPS aktif."
+          }),
+          { enableHighAccuracy: true, timeout: 8000, maximumAge: 10000 }
         );
       });
+    }
+
+    function crossCheckGps(pointKey, coords) {
+      const target = CHECKIN_COORDS[pointKey];
+      if (!GPS_CHECK_ENABLED || !target) {
+        return { ok: true, distanceMeters: null };
+      }
+
+      if (coords.lat === "" || coords.lng === "") {
+        return {
+          ok: false,
+          message: `Cross-check GPS ${target.label} gagal: ${coords.error || "Koordinat GPS tidak tersedia."}`
+        };
+      }
+
+      const dist = calculateDistanceMeters_(
+        Number(coords.lat),
+        Number(coords.lng),
+        Number(target.lat),
+        Number(target.lng)
+      );
+
+      if (dist > target.maxDistanceMeters) {
+        return {
+          ok: false,
+          message: `Di luar area ${target.label}! Jarak Anda ${Math.round(dist)} m (batas maksimal ${target.maxDistanceMeters} m).`
+        };
+      }
+
+      return { ok: true, distanceMeters: Math.round(dist) };
     }
 
     async function sendToServer(pointKey, bib, lat, lng) {
@@ -347,11 +436,22 @@
     }
 
     async function triggerCheckin(pointKey) {
+      const normalizedPoint = (pointKey || "").toString().trim().toLowerCase();
       const bib = (document.getElementById("inputBIB")?.value || "").trim().toUpperCase();
       const coords = await getCurrentLocation();
-      await sendToServer(pointKey, bib, coords.lat, coords.lng);
+
+      if (["start", "cp1", "cp2", "cp3", "finish"].includes(normalizedPoint)) {
+        const gpsCheck = crossCheckGps(normalizedPoint, coords);
+        if (!gpsCheck.ok) {
+          showStatus(gpsCheck.message, "err");
+          return;
+        }
+      }
+
+      await sendToServer(normalizedPoint, bib, coords.lat, coords.lng);
     }
 
+    initGpxLinks();
     updateStartButtonState();
     setInterval(updateStartButtonState, 30000);
   </script>
