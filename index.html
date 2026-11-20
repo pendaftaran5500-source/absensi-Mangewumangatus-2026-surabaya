@@ -10,12 +10,16 @@
     .container { max-width: 520px; margin: 0 auto; background: #1e293b; border-radius: 14px; padding: 20px; box-shadow: 0 10px 30px rgba(0,0,0,.35); }
     h1 { margin: 0 0 6px; font-size: 1.25rem; }
     p.sub { margin: 0 0 18px; color: #94a3b8; font-size: .9rem; }
+    .session-bar { display: flex; justify-content: space-between; align-items: center; gap: 10px; background: #0f172a; border: 1px solid #0284c7; border-radius: 10px; padding: 10px 12px; margin-bottom: 16px; font-size: .85rem; }
+    .session-info strong { color: #38bdf8; }
+    .btn-logout { width: auto; padding: 6px 10px; font-size: .78rem; background: #334155; color: #f8fafc; border-radius: 6px; flex-shrink: 0; }
+    .btn-logout:hover { background: #475569; }
     .form-group { margin-bottom: 14px; }
     label { display: block; margin-bottom: 6px; font-size: .88rem; color: #e2e8f0; }
     input { width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid #334155; background: #0f172a; color: #fff; font-size: 1rem; }
     input:focus { outline: none; border-color: #38bdf8; }
     .bib-hint { display: block; margin-top: 6px; color: #94a3b8; font-size: .78rem; line-height: 1.45; }
-    .hidden { display: none; }
+    .hidden { display: none !important; }
     button { width: 100%; padding: 11px 14px; border: none; border-radius: 8px; font-weight: 600; font-size: .95rem; cursor: pointer; transition: .15s; }
     .btn-primary { background: #0284c7; color: #fff; }
     .btn-primary:hover:not(:disabled) { background: #0369a1; }
@@ -39,12 +43,22 @@
     .status-ok { display: block !important; background: #052e16; border: 1px solid #16a34a; color: #86efac; }
     .status-warn { display: block !important; background: #422006; border: 1px solid #eab308; color: #fde047; }
     .status-err { display: block !important; background: #450a0a; border: 1px solid #ef4444; color: #fca5a5; }
+    .status-info { display: block !important; background: #0c4a6e; border: 1px solid #38bdf8; color: #bae6fd; }
   </style>
 </head>
 <body>
   <div class="container">
     <h1>Check-in Mangewumangatus 2026</h1>
     <p class="sub">Klaim BIB, pemulihan sesi, dan pelaporan titik check-in / DNF</p>
+
+    <!-- Banner Sesi Tersimpan -->
+    <div id="sessionBar" class="session-bar hidden">
+      <div class="session-info">
+        Sesi Aktif: <strong id="sessionBibText">-</strong>
+        <span id="sessionCatText" style="color:#94a3b8;"></span>
+      </div>
+      <button type="button" class="btn-logout" onclick="clearSavedSession()">Ganti BIB</button>
+    </div>
 
     <form id="registerForm" onsubmit="handleRegisterCheckin(event)">
       <div class="form-group">
@@ -54,7 +68,7 @@
 
       <div class="form-group">
         <label for="inputBIB">Nomor BIB</label>
-        <input id="inputBIB" type="text" placeholder="Contoh: A01 (5KM), B01 (50KM), 555 (500KM)" required />
+        <input id="inputBIB" type="text" placeholder="Contoh: A01 (5KM), B01 (50KM), 555 (500KM)" oninput="updatePointButtonsByCategory()" required />
         <small class="bib-hint">
           Kategori BIB: <strong>5KM</strong> = <code>A01–A99</code> &bull; <strong>50KM</strong> = <code>B01–B99</code> &bull; <strong>500KM</strong> = <code>500–599</code>
         </small>
@@ -70,7 +84,7 @@
         <input id="inputDob" type="date" />
       </div>
 
-      <button type="submit" class="btn-primary">Hubungkan / Pulihkan BIB</button>
+      <button id="btnSubmitReg" type="submit" class="btn-primary">Hubungkan / Pulihkan BIB</button>
     </form>
 
     <div class="grid-points">
@@ -95,6 +109,7 @@
 
   <script>
     const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxquVvOjbBq0575d24B0_03lfnSuMllgbJeQblNJFYeaQPF07rUGDI7KLakQD0aRnyB/exec";
+    const STORAGE_KEY = "mm2026_sby_checkin_session";
 
     // Ganti dengan link file GPX asli Anda
     const GPX_5KM_URL = "https://drive.google.com/uc?export=download&id=ID_FILE_GPX_5KM";
@@ -121,10 +136,155 @@
       finish: { label: "FINISH", lat: -7.2575, lng: 112.7521, maxDistanceMeters: 500 }
     };
 
+    const POINT_BUTTON_IDS = ["btnStart", "btnCp1", "btnCp2", "btnCp3", "btnFinish", "btnDnf"];
+    const ORIGINAL_BTN_LABELS = {
+      btnStart: "START",
+      btnCp1: "CP 1",
+      btnCp2: "CP 2",
+      btnCp3: "CP 3",
+      btnFinish: "FINISH",
+      btnDnf: "LAPOR DNF"
+    };
+
     let cachedCategoryRegId = "";
     let cachedCategoryText = "";
     let categoryDebounceTimer = null;
+    let isCheckinBusy = false;
 
+    // --- LOCALSTORAGE SESSION ---
+    function saveSession(regId, bib, bib2, category) {
+      try {
+        const payload = {
+          regId: (regId || "").trim(),
+          bib: (bib || "").trim().toUpperCase(),
+          bib2: (bib2 || "").trim().toUpperCase(),
+          category: (category || "").trim()
+        };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+        renderSessionBar(payload);
+      } catch (_) {}
+    }
+
+    function loadSavedSession() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return;
+        const data = JSON.parse(raw);
+        if (!data || !data.bib) return;
+
+        const regIdEl = document.getElementById("inputRegId");
+        const bib1El = document.getElementById("inputBIB");
+        const bib2El = document.getElementById("inputBIB2");
+
+        if (regIdEl && data.regId) regIdEl.value = data.regId;
+        if (bib1El && data.bib) bib1El.value = data.bib;
+        if (bib2El && data.bib2) bib2El.value = data.bib2;
+
+        if (data.category) {
+          cachedCategoryRegId = data.regId || "";
+          cachedCategoryText = data.category;
+          setPairFieldState(data.category);
+        }
+
+        renderSessionBar(data);
+        updatePointButtonsByCategory();
+      } catch (_) {}
+    }
+
+    function renderSessionBar(session) {
+      const bar = document.getElementById("sessionBar");
+      const bibEl = document.getElementById("sessionBibText");
+      const catEl = document.getElementById("sessionCatText");
+      if (!bar || !bibEl || !catEl) return;
+
+      if (session && session.bib) {
+        bibEl.textContent = session.bib;
+        catEl.textContent = session.category ? `(${session.category})` : "";
+        bar.classList.remove("hidden");
+      } else {
+        bar.classList.add("hidden");
+      }
+    }
+
+    function clearSavedSession() {
+      if (!confirm("Hapus sesi BIB yang tersimpan di perangkat ini?")) return;
+      try {
+        localStorage.removeItem(STORAGE_KEY);
+      } catch (_) {}
+
+      cachedCategoryRegId = "";
+      cachedCategoryText = "";
+      document.getElementById("inputRegId").value = "";
+      document.getElementById("inputBIB").value = "";
+      document.getElementById("inputBIB2").value = "";
+      document.getElementById("inputDob").value = "";
+      document.getElementById("groupVerifyDob").classList.add("hidden");
+      setPairFieldState("");
+      renderSessionBar(null);
+      updatePointButtonsByCategory();
+      showStatus("Sesi dihapus. Silakan masukkan ID Pendaftar dan BIB baru.", "info");
+    }
+
+    // --- KATEGORI & VISIBILITAS TOMBOL ---
+    function detectCategoryGroup() {
+      const cat = (cachedCategoryText || "").toLowerCase();
+      if (cat.includes("500")) return "500KM";
+      if (cat.includes("50")) return "50KM";
+      if (cat.includes("5km") || cat.includes("parent")) return "5KM";
+
+      // Fallback deteksi dari awalan BIB jika kategori belum terambil dari server
+      const bib = (document.getElementById("inputBIB")?.value || "").trim().toUpperCase();
+      if (/^A\d+/i.test(bib)) return "5KM";
+      if (/^B\d+/i.test(bib)) return "50KM";
+      if (/^5\d{2}/.test(bib)) return "500KM";
+
+      return "500KM"; // Default tampilkan semua sebelum terdeteksi
+    }
+
+    function updatePointButtonsByCategory() {
+      const group = detectCategoryGroup();
+      const hide500Only = (group === "5KM" || group === "50KM");
+
+      ["btnCp1", "btnCp2", "btnCp3", "btnDnf"].forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) el.classList.toggle("hidden", hide500Only);
+      });
+    }
+
+    // --- LOADING STATE & ANTI DOUBLE-TAP ---
+    function setCheckinLoading(isLoading, activePointKey = "") {
+      isCheckinBusy = isLoading;
+      const pointToBtnId = {
+        start: "btnStart",
+        cp1: "btnCp1",
+        cp2: "btnCp2",
+        cp3: "btnCp3",
+        finish: "btnFinish",
+        dnf: "btnDnf"
+      };
+
+      POINT_BUTTON_IDS.forEach((id) => {
+        const btn = document.getElementById(id);
+        if (!btn) return;
+        if (isLoading) {
+          btn.disabled = true;
+          btn.classList.add("disabled");
+          if (pointToBtnId[activePointKey] === id) {
+            btn.textContent = "Memproses...";
+          }
+        } else {
+          btn.textContent = ORIGINAL_BTN_LABELS[id];
+          btn.disabled = false;
+          btn.classList.remove("disabled");
+        }
+      });
+
+      if (!isLoading) {
+        updateStartButtonState();
+      }
+    }
+
+    // --- GPX & START LOCK ---
     function isGpxLocked() {
       if (TEST_UNLOCK_GPX_BEFORE_DEADLINE) return false;
       return new Date() < GPX_UNLOCK_DATE;
@@ -173,6 +333,7 @@
       box.className = "";
       if (type === "ok") box.classList.add("status-ok");
       else if (type === "warn") box.classList.add("status-warn");
+      else if (type === "info") box.classList.add("status-info");
       else box.classList.add("status-err");
       box.textContent = msg;
     }
@@ -183,6 +344,7 @@
     }
 
     function updateStartButtonState() {
+      if (isCheckinBusy) return;
       const startBtn = document.getElementById("btnStart");
       if (!startBtn) return;
 
@@ -192,6 +354,7 @@
       startBtn.title = locked ? "Check-in START baru dibuka pada Hari H." : "";
     }
 
+    // --- FORM REGISTRASI & PAIRING ---
     function normalizeDobInput(val) {
       if (!val) return "";
       const s = val.toString().trim();
@@ -242,11 +405,13 @@
         cachedCategoryRegId = "";
         cachedCategoryText = "";
         setPairFieldState("");
+        updatePointButtonsByCategory();
         return;
       }
 
       if (cachedCategoryRegId.toLowerCase() === regId.toLowerCase()) {
         setPairFieldState(cachedCategoryText);
+        updatePointButtonsByCategory();
         return;
       }
 
@@ -265,6 +430,7 @@
           cachedCategoryRegId = regId;
           cachedCategoryText = String(r.category);
           setPairFieldState(cachedCategoryText);
+          updatePointButtonsByCategory();
         } else {
           setPairFieldState("");
         }
@@ -316,7 +482,7 @@
       const bib2El = document.getElementById("inputBIB2");
       const groupDob = document.getElementById("groupVerifyDob");
       const dobInput = document.getElementById("inputDob");
-      const submitBtn = e?.target?.querySelector("button[type='submit']") || null;
+      const submitBtn = document.getElementById("btnSubmitReg");
 
       const regId = (regIdEl?.value || "").trim();
       const bib1 = (bib1El?.value || "").trim().toUpperCase();
@@ -335,7 +501,11 @@
         }
       }
 
-      if (submitBtn) submitBtn.disabled = true;
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = "Menghubungkan...";
+      }
+      showStatus("Memverifikasi data ke server...", "info");
 
       try {
         const r = await postToScript({
@@ -364,20 +534,30 @@
             groupDob.classList.add("hidden");
             dobInput.required = false;
           }
-          if (r.bib && bib1El) {
-            bib1El.value = r.bib;
-          }
-          showStatus(r.message || "BIB berhasil dihubungkan.", "ok");
+          const finalBib = r.bib ? String(r.bib).trim().toUpperCase() : bib1;
+          if (bib1El) bib1El.value = finalBib;
+
+          const finalCat = r.category || cachedCategoryText || detectCategoryGroup();
+          cachedCategoryRegId = regId;
+          cachedCategoryText = finalCat;
+
+          saveSession(regId, finalBib, bib2, finalCat);
+          updatePointButtonsByCategory();
+          showStatus(r.message || "BIB berhasil dihubungkan dan sesi disimpan di perangkat ini.", "ok");
         } else {
           showStatus(r.message || "Gagal memproses klaim BIB.", "err");
         }
       } catch (err) {
         showStatus(err.message || "Koneksi terputus ke server.", "err");
       } finally {
-        if (submitBtn) submitBtn.disabled = false;
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.textContent = "Hubungkan / Pulihkan BIB";
+        }
       }
     }
 
+    // --- GPS & CHECK-IN ---
     function calculateDistanceMeters_(lat1, lng1, lat2, lng2) {
       const toRad = (deg) => (deg * Math.PI) / 180;
       const R = 6371000;
@@ -394,18 +574,20 @@
     function getCurrentLocation() {
       return new Promise((resolve) => {
         if (!navigator.geolocation) {
-          resolve({ lat: "", lng: "", error: "Perangkat tidak mendukung GPS / Geolocation." });
+          resolve({ lat: "", lng: "", accuracy: null, error: "Perangkat tidak mendukung GPS / Geolocation." });
           return;
         }
         navigator.geolocation.getCurrentPosition(
           (pos) => resolve({
             lat: pos.coords.latitude,
             lng: pos.coords.longitude,
+            accuracy: Math.round(pos.coords.accuracy || 0),
             error: ""
           }),
           (err) => resolve({
             lat: "",
             lng: "",
+            accuracy: null,
             error: err && err.code === 1
               ? "Izin lokasi GPS ditolak. Aktifkan izin lokasi di browser."
               : "Gagal membaca koordinat GPS. Pastikan GPS aktif."
@@ -436,9 +618,10 @@
       );
 
       if (dist > target.maxDistanceMeters) {
+        const accInfo = coords.accuracy ? `\nAkurasi GPS perangkat Anda saat ini: ±${coords.accuracy} m.` : "";
         return {
           ok: false,
-          message: `Di luar area ${target.label}! Jarak Anda ${Math.round(dist)} m (batas maksimal ${target.maxDistanceMeters} m).`
+          message: `Di luar area ${target.label}! Jarak Anda ${Math.round(dist)} m (batas maksimal ${target.maxDistanceMeters} m).${accInfo}`
         };
       }
 
@@ -449,16 +632,13 @@
       const normalizedPoint = (pointKey || "").toString().trim().toLowerCase();
       const cleanBib = (bib || "").toString().trim().toUpperCase();
 
-      if (!cleanBib) {
-        showStatus("Masukkan Nomor BIB terlebih dahulu.", "err");
-        return;
-      }
-
       if (normalizedPoint === "start" && isStartLocked()) {
         showStatus("Check-in START belum dibuka karena belum memasuki Hari H.", "warn");
         updateStartButtonState();
         return;
       }
+
+      showStatus(`Mengirim laporan ${normalizedPoint.toUpperCase()} untuk BIB ${cleanBib}...`, "info");
 
       try {
         const r = await postToScript({
@@ -480,23 +660,56 @@
     }
 
     async function triggerCheckin(pointKey) {
+      if (isCheckinBusy) return;
+
       const normalizedPoint = (pointKey || "").toString().trim().toLowerCase();
       const bib = (document.getElementById("inputBIB")?.value || "").trim().toUpperCase();
-      const coords = await getCurrentLocation();
 
-      if (["start", "cp1", "cp2", "cp3", "finish"].includes(normalizedPoint)) {
-        const gpsCheck = crossCheckGps(normalizedPoint, coords);
-        if (!gpsCheck.ok) {
-          showStatus(gpsCheck.message, "err");
+      if (!bib) {
+        showStatus("Masukkan atau hubungkan Nomor BIB terlebih dahulu.", "err");
+        return;
+      }
+
+      // Konfirmasi ganda khusus LAPOR DNF
+      if (normalizedPoint === "dnf") {
+        const firstConfirm = confirm(
+          `PERINGATAN: Anda akan melaporkan DNF untuk BIB ${bib}.\nStatus DNF bersifat permanen dan tidak bisa dibatalkan.\n\nLanjutkan?`
+        );
+        if (!firstConfirm) return;
+
+        const typed = prompt('Ketik kata "DNF" (huruf besar) untuk mengonfirmasi:');
+        if (typed === null || typed.trim().toUpperCase() !== "DNF") {
+          showStatus("Pelaporan DNF dibatalkan.", "warn");
           return;
         }
       }
 
-      await sendToServer(normalizedPoint, bib, coords.lat, coords.lng);
+      setCheckinLoading(true, normalizedPoint);
+      showStatus("Mengambil sinyal GPS, mohon tunggu...", "info");
+
+      try {
+        const coords = await getCurrentLocation();
+
+        if (["start", "cp1", "cp2", "cp3", "finish"].includes(normalizedPoint)) {
+          const gpsCheck = crossCheckGps(normalizedPoint, coords);
+          if (!gpsCheck.ok) {
+            showStatus(gpsCheck.message, "err");
+            return;
+          }
+        }
+
+        await sendToServer(normalizedPoint, bib, coords.lat, coords.lng);
+      } finally {
+        setCheckinLoading(false);
+      }
     }
 
+    // --- INIT ---
+    loadSavedSession();
     updateGpxButtonState();
     updateStartButtonState();
+    updatePointButtonsByCategory();
+
     setInterval(() => {
       updateGpxButtonState();
       updateStartButtonState();
