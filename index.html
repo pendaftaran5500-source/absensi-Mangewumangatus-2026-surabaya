@@ -44,6 +44,29 @@
     .status-warn { display: block !important; background: #422006; border: 1px solid #eab308; color: #fde047; }
     .status-err { display: block !important; background: #450a0a; border: 1px solid #ef4444; color: #fca5a5; }
     .status-info { display: block !important; background: #0c4a6e; border: 1px solid #38bdf8; color: #bae6fd; }
+
+    /* --- SLIDE DARURAT / SOS (KHUSUS 500KM) --- */
+    .sos-box { margin-top: 18px; padding: 14px; border-radius: 12px; background: #2c0b12; border: 1px solid #e11d48; }
+    .sos-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .sos-title { font-weight: 700; font-size: .92rem; color: #fda4af; }
+    .sos-badge { font-size: .72rem; background: #9f1239; color: #ffe4e6; padding: 2px 8px; border-radius: 999px; font-weight: 600; }
+    .sos-desc { margin: 0 0 10px; font-size: .8rem; color: #fecdd3; line-height: 1.4; }
+    .sos-slider-wrap { position: relative; width: 100%; height: 48px; background: #4c0519; border: 1px solid #fb7185; border-radius: 999px; overflow: hidden; display: flex; align-items: center; justify-content: center; user-select: none; }
+    .sos-slider-label { font-size: .84rem; font-weight: 700; color: #ffe4e6; letter-spacing: .3px; pointer-events: none; padding-left: 28px; }
+    .sos-slider-range { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; z-index: 3; }
+    .sos-slider-thumb { position: absolute; left: 4px; top: 4px; width: 38px; height: 38px; border-radius: 50%; background: #e11d48; color: #fff; font-weight: 700; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 8px rgba(0,0,0,.45); pointer-events: none; z-index: 2; transition: transform .05s linear; }
+    .sos-actions { margin-top: 12px; display: grid; gap: 8px; }
+    .sos-gps-status { font-size: .8rem; background: #0f172a; border: 1px solid #334155; color: #cbd5e1; padding: 8px 10px; border-radius: 8px; line-height: 1.4; }
+    .btn-sos-link { display: block; text-align: center; text-decoration: none; padding: 11px 12px; border-radius: 8px; font-weight: 700; font-size: .88rem; transition: .15s; }
+    .sos-112 { background: #dc2626; color: #fff; }
+    .sos-112:hover { background: #b91c1c; }
+    .sos-119 { background: #e11d48; color: #fff; }
+    .sos-119:hover { background: #be123c; }
+    .sos-rd  { background: #0284c7; color: #fff; }
+    .sos-rd:hover  { background: #0369a1; }
+    .sos-rs  { background: #334155; color: #f8fafc; }
+    .sos-rs:hover  { background: #475569; }
+    .btn-sos-close { margin-top: 4px; background: transparent; border: 1px solid #fb7185; color: #fecdd3; font-size: .8rem; padding: 7px 10px; }
   </style>
 </head>
 <body>
@@ -97,10 +120,36 @@
     </div>
 
     <div class="gpx-box">
-      <div id="gpxTitle" class="gpx-title">Unduh Rute GPX (Terkunci s/d 25 Des 2026 20:59 WIB)</div>
+      <div id="gpxTitle" class="gpx-title">Unduh Rute GPX (Terkunci oleh Server)</div>
       <div class="gpx-grid">
-        <a id="btnGpx5KM" class="btn-gpx locked" href="#" target="_blank" rel="noopener noreferrer" aria-disabled="true" onclick="return handleGpxClick(event, '5KM')">Download GPX 5KM</a>
-        <a id="btnGpx50KM" class="btn-gpx locked" href="#" target="_blank" rel="noopener noreferrer" aria-disabled="true" onclick="return handleGpxClick(event, '50KM')">Download GPX 50KM</a>
+        <a id="btnGpx5KM" class="btn-gpx locked" href="javascript:void(0)" target="_blank" rel="noopener noreferrer" aria-disabled="true" onclick="return handleGpxClick(event, '5KM')">Download GPX 5KM</a>
+        <a id="btnGpx50KM" class="btn-gpx locked" href="javascript:void(0)" target="_blank" rel="noopener noreferrer" aria-disabled="true" onclick="return handleGpxClick(event, '50KM')">Download GPX 50KM</a>
+      </div>
+    </div>
+
+    <!-- PANEL SLIDE DARURAT / SOS (KHUSUS 500KM) -->
+    <div id="sosBox" class="sos-box">
+      <div class="sos-header">
+        <span class="sos-title">🆘 Bantuan Darurat 500KM</span>
+        <span class="sos-badge">Polisi / Ambulans / RD</span>
+      </div>
+      <p class="sos-desc">
+        Khusus kondisi medis, kecelakaan, atau keadaan darurat di jalan. Geser tombol di bawah hingga ujung kanan untuk membuka panggilan darurat.
+      </p>
+
+      <div id="sosSliderWrap" class="sos-slider-wrap">
+        <div id="sosSliderThumb" class="sos-slider-thumb">➜</div>
+        <span class="sos-slider-label">Geser untuk Darurat (SOS)</span>
+        <input id="sosSliderRange" class="sos-slider-range" type="range" min="0" max="100" value="0" aria-label="Geser untuk membuka bantuan darurat" />
+      </div>
+
+      <div id="sosActions" class="sos-actions hidden">
+        <div id="sosGpsStatus" class="sos-gps-status">Mendeteksi koordinat GPS Anda...</div>
+        <a class="btn-sos-link sos-112" href="tel:112">📞 Telepon Darurat Nasional (112)</a>
+        <a class="btn-sos-link sos-119" href="tel:119">🚑 Telepon Ambulans Medis (119)</a>
+        <a id="btnSosWaRd" class="btn-sos-link sos-rd" href="#" target="_blank" rel="noopener noreferrer">📲 Kirim Lokasi GPS ke WhatsApp RD / Posko</a>
+        <a id="btnSosMapsRs" class="btn-sos-link sos-rs" href="https://www.google.com/maps/search/IGD+Rumah+Sakit+terdekat/" target="_blank" rel="noopener noreferrer">🏥 Cari IGD / RS Terdekat di Maps</a>
+        <button type="button" class="btn-sos-close" onclick="resetSosPanel()">Tutup &amp; Kunci Kembali Panel Darurat</button>
       </div>
     </div>
 
@@ -111,7 +160,10 @@
     const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbysXEtP-mo0BqeH28MxMG1S0il__kJvBFfU01EbXEACA_bhYe45uEXPany1Kwmb-W_k/exec";
     const STORAGE_KEY = "mm2026_sby_checkin_session";
 
-       // --- GPX (SERVER-SIDE) & START LOCK ---
+    // Ganti nomor WhatsApp Posko / Race Director (format 628xxx tanpa + atau spasi)
+    const RD_EMERGENCY_WA = "6281234567890";
+
+    // --- GPX (SERVER-SIDE) & START LOCK ---
     let serverGpxState = {
       unlocked: false,
       gpx5km: "",
@@ -181,7 +233,6 @@
       return true;
     }
 
-
     // Jadwal resmi Hari H (WIB +07:00)
     const EVENT_START_DATE = new Date("2026-11-22T05:00:00+07:00");
     // Ubah ke false saat sudah siap untuk Hari H asli
@@ -213,6 +264,101 @@
     let cachedCategoryText = "";
     let categoryDebounceTimer = null;
     let isCheckinBusy = false;
+
+    // --- SLIDE DARURAT / SOS (KHUSUS 500KM) ---
+    function updateSosLinks(lat, lng) {
+      const bib = (document.getElementById("inputBIB")?.value || "").trim().toUpperCase() || "-";
+      const regId = (document.getElementById("inputRegId")?.value || "").trim() || "-";
+      const hasCoords = (lat !== "" && lng !== "" && lat != null && lng != null);
+      const mapsUrl = hasCoords ? `https://maps.google.com/?q=${lat},${lng}` : "Koordinat GPS tidak tersedia";
+
+      const msgText =
+        `🆘 DARURAT MANGEWUMANGATUS 500KM\n` +
+        `ID Pendaftar: ${regId}\n` +
+        `Nomor BIB: ${bib}\n` +
+        `Lokasi GPS: ${mapsUrl}\n` +
+        `Mohon bantuan evakuasi / medis segera.`;
+
+      const waBtn = document.getElementById("btnSosWaRd");
+      if (waBtn) {
+        waBtn.href = `https://wa.me/${RD_EMERGENCY_WA}?text=${encodeURIComponent(msgText)}`;
+      }
+
+      const rsBtn = document.getElementById("btnSosMapsRs");
+      if (rsBtn && hasCoords) {
+        rsBtn.href = `https://www.google.com/maps/search/IGD+Rumah+Sakit/@${lat},${lng},14z`;
+      }
+    }
+
+    async function activateSosPanel() {
+      const sliderWrap = document.getElementById("sosSliderWrap");
+      const actionsBox = document.getElementById("sosActions");
+      const gpsStatusEl = document.getElementById("sosGpsStatus");
+
+      if (sliderWrap) sliderWrap.classList.add("hidden");
+      if (actionsBox) actionsBox.classList.remove("hidden");
+
+      updateSosLinks("", "");
+      if (gpsStatusEl) gpsStatusEl.textContent = "Mendeteksi koordinat GPS terkini Anda...";
+
+      const coords = await getCurrentLocation();
+      if (coords.lat !== "" && coords.lng !== "") {
+        const latStr = Number(coords.lat).toFixed(6);
+        const lngStr = Number(coords.lng).toFixed(6);
+        if (gpsStatusEl) {
+          gpsStatusEl.textContent = `Koordinat GPS terdeteksi: ${latStr}, ${lngStr} (±${coords.accuracy || 0} m)`;
+        }
+        updateSosLinks(latStr, lngStr);
+      } else if (gpsStatusEl) {
+        gpsStatusEl.textContent = `${coords.error || "GPS tidak aktif."} Anda tetap bisa menelepon 112 atau 119 langsung.`;
+      }
+    }
+
+    function resetSosPanel() {
+      const sliderWrap = document.getElementById("sosSliderWrap");
+      const actionsBox = document.getElementById("sosActions");
+      const range = document.getElementById("sosSliderRange");
+      const thumb = document.getElementById("sosSliderThumb");
+
+      if (range) range.value = "0";
+      if (thumb) thumb.style.transform = "translateX(0px)";
+      if (actionsBox) actionsBox.classList.add("hidden");
+      if (sliderWrap) sliderWrap.classList.remove("hidden");
+    }
+
+    function initSosSlider() {
+      const wrap = document.getElementById("sosSliderWrap");
+      const range = document.getElementById("sosSliderRange");
+      const thumb = document.getElementById("sosSliderThumb");
+      if (!wrap || !range || !thumb) return;
+
+      const updateThumbPosition = () => {
+        const val = Number(range.value || 0);
+        const maxTravel = Math.max(0, wrap.clientWidth - 48);
+        const px = Math.round((val / 100) * maxTravel);
+        thumb.style.transform = `translateX(${px}px)`;
+      };
+
+      range.addEventListener("input", () => {
+        updateThumbPosition();
+        if (Number(range.value) >= 92) {
+          range.value = "100";
+          updateThumbPosition();
+          activateSosPanel();
+        }
+      });
+
+      const snapBackIfIncomplete = () => {
+        if (Number(range.value) < 92) {
+          range.value = "0";
+          thumb.style.transform = "translateX(0px)";
+        }
+      };
+
+      range.addEventListener("change", snapBackIfIncomplete);
+      range.addEventListener("touchend", snapBackIfIncomplete);
+      range.addEventListener("mouseup", snapBackIfIncomplete);
+    }
 
     // --- LOCALSTORAGE SESSION ---
     function saveSession(regId, bib, bib2, category) {
@@ -284,6 +430,7 @@
       document.getElementById("groupVerifyDob").classList.add("hidden");
       setPairFieldState("");
       renderSessionBar(null);
+      resetSosPanel();
       updatePointButtonsByCategory();
       showStatus("Sesi dihapus. Silakan masukkan ID Pendaftar dan BIB baru.", "info");
     }
@@ -312,6 +459,11 @@
         const el = document.getElementById(id);
         if (el) el.classList.toggle("hidden", hide500Only);
       });
+
+      const sosBox = document.getElementById("sosBox");
+      if (sosBox) {
+        sosBox.classList.toggle("hidden", group !== "500KM");
+      }
     }
 
     // --- LOADING STATE & ANTI DOUBLE-TAP ---
@@ -345,49 +497,6 @@
       if (!isLoading) {
         updateStartButtonState();
       }
-    }
-
-    // --- GPX & START LOCK ---
-    function isGpxLocked() {
-      if (TEST_UNLOCK_GPX_BEFORE_DEADLINE) return false;
-      return new Date() < GPX_UNLOCK_DATE;
-    }
-
-    function updateGpxButtonState() {
-      const locked = isGpxLocked();
-      const link5 = document.getElementById("btnGpx5KM");
-      const link50 = document.getElementById("btnGpx50KM");
-      const titleEl = document.getElementById("gpxTitle");
-
-      if (titleEl) {
-        titleEl.textContent = locked
-          ? "Unduh Rute GPX (Terkunci s/d 25 Des 2026 20:59 WIB)"
-          : "Unduh Rute GPX";
-      }
-
-      [
-        { el: link5, url: GPX_5KM_URL },
-        { el: link50, url: GPX_50KM_URL }
-      ].forEach(({ el, url }) => {
-        if (!el) return;
-        el.classList.toggle("locked", locked);
-        el.setAttribute("aria-disabled", locked ? "true" : "false");
-        el.href = locked ? "javascript:void(0)" : url;
-        el.title = locked ? "Unduhan GPX dibuka mulai 25 Desember 2026 pukul 20:59 WIB." : "";
-      });
-    }
-
-    function handleGpxClick(e, categoryLabel) {
-      if (isGpxLocked()) {
-        if (e && e.preventDefault) e.preventDefault();
-        showStatus(
-          `Download GPX ${categoryLabel} masih dikunci hingga 25 Desember 2026 pukul 20:59 WIB.`,
-          "warn"
-        );
-        updateGpxButtonState();
-        return false;
-      }
-      return true;
     }
 
     function showStatus(msg, type = "ok") {
@@ -767,7 +876,8 @@
       }
     }
 
-       // --- INIT ---
+    // --- INIT ---
+    initSosSlider();
     loadSavedSession();
     updateGpxButtonState();
     syncGpxFromServer();
