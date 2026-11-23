@@ -157,11 +157,11 @@
   </div>
 
   <script>
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbysXEtP-mo0BqeH28MxMG1S0il__kJvBFfU01EbXEACA_bhYe45uEXPany1Kwmb-W_k/exec";
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyCFFKKot5gW3uW8Q0tGNY6Uzf-jtHf4973FRqT9qjG9pcwKYt228s_26T89Gks8Su8/exec";
     const STORAGE_KEY = "mm2026_sby_checkin_session";
 
     // Ganti nomor WhatsApp Posko / Race Director (format 628xxx tanpa + atau spasi)
-    const RD_EMERGENCY_WA = "6281234567890";
+    const RD_EMERGENCY_WA = "62825157225790";
 
     // --- GPX (SERVER-SIDE) & START LOCK ---
     let serverGpxState = {
@@ -291,28 +291,50 @@
     }
 
     async function activateSosPanel() {
-      const sliderWrap = document.getElementById("sosSliderWrap");
-      const actionsBox = document.getElementById("sosActions");
-      const gpsStatusEl = document.getElementById("sosGpsStatus");
+  const sliderWrap = document.getElementById("sosSliderWrap");
+  const actionsBox = document.getElementById("sosActions");
+  const gpsStatusEl = document.getElementById("sosGpsStatus");
 
-      if (sliderWrap) sliderWrap.classList.add("hidden");
-      if (actionsBox) actionsBox.classList.remove("hidden");
+  if (sliderWrap) sliderWrap.classList.add("hidden");
+  if (actionsBox) actionsBox.classList.remove("hidden");
 
-      updateSosLinks("", "");
-      if (gpsStatusEl) gpsStatusEl.textContent = "Mendeteksi koordinat GPS terkini Anda...";
+  updateSosLinks("", "");
+  if (gpsStatusEl) gpsStatusEl.textContent = "Mendeteksi koordinat GPS terkini & mengirim sinyal SOS...";
 
-      const coords = await getCurrentLocation();
-      if (coords.lat !== "" && coords.lng !== "") {
-        const latStr = Number(coords.lat).toFixed(6);
-        const lngStr = Number(coords.lng).toFixed(6);
-        if (gpsStatusEl) {
-          gpsStatusEl.textContent = `Koordinat GPS terdeteksi: ${latStr}, ${lngStr} (±${coords.accuracy || 0} m)`;
-        }
-        updateSosLinks(latStr, lngStr);
-      } else if (gpsStatusEl) {
-        gpsStatusEl.textContent = `${coords.error || "GPS tidak aktif."} Anda tetap bisa menelepon 112 atau 119 langsung.`;
-      }
+  const coords = await getCurrentLocation();
+  const hasCoords = (coords.lat !== "" && coords.lng !== "");
+  const latStr = hasCoords ? Number(coords.lat).toFixed(6) : "";
+  const lngStr = hasCoords ? Number(coords.lng).toFixed(6) : "";
+
+  if (hasCoords) {
+    updateSosLinks(latStr, lngStr);
+  }
+
+  // Kirim sinyal darurat otomatis ke server (Log_SOS + Telegram Grup RD beserta info golongan darah & kontak darurat)
+  const bib = (document.getElementById("inputBIB")?.value || "").trim().toUpperCase();
+  const regId = (document.getElementById("inputRegId")?.value || "").trim();
+  let serverNotifText = "";
+  try {
+    const res = await postToScript({
+      action: "sos",
+      bib: bib,
+      regId: regId,
+      lat: latStr,
+      lng: lngStr
+    });
+    if (res && res.status === "success") {
+      serverNotifText = " Sinyal SOS otomatis terkirim ke Posko RD.";
     }
+  } catch (_) {}
+
+  if (gpsStatusEl) {
+    if (hasCoords) {
+      gpsStatusEl.textContent = `Koordinat GPS: ${latStr}, ${lngStr} (±${coords.accuracy || 0} m).${serverNotifText}`;
+    } else {
+      gpsStatusEl.textContent = `${coords.error || "GPS tidak aktif."}${serverNotifText} Anda tetap bisa menelepon 112 / 119 langsung.`;
+    }
+  }
+}
 
     function resetSosPanel() {
       const sliderWrap = document.getElementById("sosSliderWrap");
