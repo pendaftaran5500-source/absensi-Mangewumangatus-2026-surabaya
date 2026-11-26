@@ -67,6 +67,12 @@
     .sos-rs  { background: #334155; color: #f8fafc; }
     .sos-rs:hover  { background: #475569; }
     .btn-sos-close { margin-top: 4px; background: transparent; border: 1px solid #fb7185; color: #fecdd3; font-size: .8rem; padding: 7px 10px; }
+
+    /* --- UPLOAD GPX PESERTA 500KM --- */
+    .gpx-upload-box { margin-top: 16px; padding: 14px; border-radius: 12px; background: #0f172a; border: 1px solid #0284c7; }
+    .gpx-upload-title { font-weight: 700; font-size: .92rem; color: #38bdf8; margin-bottom: 6px; }
+    .gpx-upload-desc { margin: 0 0 10px; font-size: .8rem; color: #94a3b8; line-height: 1.4; }
+    .gpx-file-input { width: 100%; padding: 8px; margin-bottom: 10px; border-radius: 8px; border: 1px dashed #38bdf8; background: #1e293b; color: #e2e8f0; font-size: .85rem; }
   </style>
 </head>
 <body>
@@ -125,6 +131,18 @@
         <a id="btnGpx5KM" class="btn-gpx locked" href="javascript:void(0)" target="_blank" rel="noopener noreferrer" aria-disabled="true" onclick="return handleGpxClick(event, '5KM')">Download GPX 5KM</a>
         <a id="btnGpx50KM" class="btn-gpx locked" href="javascript:void(0)" target="_blank" rel="noopener noreferrer" aria-disabled="true" onclick="return handleGpxClick(event, '50KM')">Download GPX 50KM</a>
       </div>
+    </div>
+
+    <!-- PANEL UPLOAD GPX (KHUSUS 500KM) -->
+    <div id="uploadGpx500Box" class="gpx-upload-box hidden">
+      <div class="gpx-upload-title">📤 Upload File GPX Peserta 500KM</div>
+      <p class="gpx-upload-desc">
+        Khusus peserta 500KM. Unggah file rute/rekaman aktivitas berformat <strong>.gpx</strong> (maks. 15 MB) untuk verifikasi panitia.
+      </p>
+      <input id="inputGpx500" class="gpx-file-input" type="file" accept=".gpx,application/gpx+xml,text/xml" />
+      <button id="btnUploadGpx500" type="button" class="btn-primary" onclick="handleUploadGpx500()">
+        Upload File GPX 500KM
+      </button>
     </div>
 
     <!-- PANEL SLIDE DARURAT / SOS (KHUSUS 500KM) -->
@@ -485,6 +503,11 @@
       const sosBox = document.getElementById("sosBox");
       if (sosBox) {
         sosBox.classList.toggle("hidden", group !== "500KM");
+      }
+
+      const uploadGpxBox = document.getElementById("uploadGpx500Box");
+      if (uploadGpxBox) {
+        uploadGpxBox.classList.toggle("hidden", group !== "500KM");
       }
     }
 
@@ -895,6 +918,69 @@
         await sendToServer(normalizedPoint, bib, coords.lat, coords.lng);
       } finally {
         setCheckinLoading(false);
+      }
+    }
+
+    // --- UPLOAD FILE GPX PESERTA 500KM ---
+    async function handleUploadGpx500() {
+      const bib = (document.getElementById("inputBIB")?.value || "").trim().toUpperCase();
+      const regId = (document.getElementById("inputRegId")?.value || "").trim();
+      const fileInput = document.getElementById("inputGpx500");
+      const btn = document.getElementById("btnUploadGpx500");
+
+      if (!bib) {
+        showStatus("Masukkan atau hubungkan Nomor BIB 500KM terlebih dahulu sebelum upload GPX.", "err");
+        return;
+      }
+
+      const file = fileInput?.files?.[0];
+      if (!file) {
+        showStatus("Pilih file .gpx terlebih dahulu.", "warn");
+        return;
+      }
+
+      if (!file.name.toLowerCase().endsWith(".gpx")) {
+        showStatus("Format file tidak valid. Harap pilih file berformat .gpx", "err");
+        return;
+      }
+
+      const maxBytes = 15 * 1024 * 1024; // 15 MB
+      if (file.size > maxBytes) {
+        showStatus("Ukuran file terlalu besar (maksimal 15 MB).", "err");
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = "Mengunggah GPX...";
+      showStatus(`Membaca & mengunggah ${file.name} untuk BIB ${bib}...`, "info");
+
+      try {
+        const gpxText = await file.text();
+
+        const res = await fetch(SCRIPT_URL, {
+          method: "POST",
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: JSON.stringify({
+            action: "upload_gpx_500km",
+            bib: bib,
+            regId: regId,
+            fileName: file.name,
+            gpxContent: gpxText
+          })
+        });
+
+        const data = await res.json();
+        if (data.status === "success") {
+          fileInput.value = "";
+          showStatus(data.message || `File GPX berhasil diunggah untuk BIB ${bib}.`, "ok");
+        } else {
+          showStatus(data.message || "Gagal mengunggah file GPX.", "err");
+        }
+      } catch (err) {
+        showStatus("Gagal mengirim file GPX ke server. Periksa koneksi internet Anda.", "err");
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Upload File GPX 500KM";
       }
     }
 
